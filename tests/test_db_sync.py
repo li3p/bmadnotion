@@ -31,6 +31,7 @@ database_sync:
     database_id: "tasks-db-456"
     name_property: "Name"
     status_property: "Status"
+    require_story_file: false  # Sync all stories for testing
     status_mapping:
       backlog: "Backlog"
       ready-for-dev: "Ready"

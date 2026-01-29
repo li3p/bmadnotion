@@ -253,8 +253,10 @@ def init(project: str | None, skip_notion: bool, force: bool):
             "sprints": {
                 "database_id": db_ids.get("sprints", ""),
                 "key_property": "BMADEpic",
+                "name_property": "Sprint name",
+                "status_property": "Status",
                 "status_mapping": {
-                    "backlog": "Not Started",
+                    "backlog": "Backlog",
                     "in-progress": "In Progress",
                     "done": "Done",
                 },
@@ -262,6 +264,9 @@ def init(project: str | None, skip_notion: bool, force: bool):
             "tasks": {
                 "database_id": db_ids.get("tasks", ""),
                 "key_property": "BMADStory",
+                "name_property": "Task name",
+                "status_property": "Status",
+                "require_story_file": True,  # Only sync stories with markdown files
                 "status_mapping": {
                     "backlog": "Backlog",
                     "ready-for-dev": "Ready",
