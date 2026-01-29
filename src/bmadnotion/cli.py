@@ -307,16 +307,19 @@ def init(project: str | None, skip_notion: bool, force: bool):
             notion_client = Client(auth=token)
             store = Store(project_root)
 
-            # Check if project exists using raw request
-            # notion-client 2.x doesn't have databases.query method
-            response = notion_client.request(
-                path=f"databases/{db_ids['projects']}/query",
-                method="POST",
-                body={
-                    "filter": {
-                        "property": "BMADProject",
-                        "rich_text": {"equals": project_name},
-                    },
+            # Get data_source_id from database (required for 2025-09-03 API)
+            db = notion_client.databases.retrieve(database_id=db_ids["projects"])
+            data_sources = db.get("data_sources", [])
+            if not data_sources:
+                raise ValueError("No data sources found in Projects database")
+            ds_id = data_sources[0]["id"]
+
+            # Query using data_sources endpoint
+            response = notion_client.data_sources.query(
+                data_source_id=ds_id,
+                filter={
+                    "property": "BMADProject",
+                    "rich_text": {"equals": project_name},
                 },
             )
 

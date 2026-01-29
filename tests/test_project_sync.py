@@ -32,8 +32,12 @@ database_sync:
 def mock_notion_client():
     """Create a mock official notion-client."""
     client = MagicMock()
-    # Mock request method (used for database query in notion-client 2.x)
-    client.request.return_value = {"results": []}
+    # Mock databases.retrieve to return data_sources
+    client.databases.retrieve.return_value = {
+        "data_sources": [{"id": "ds-123", "name": "Projects"}]
+    }
+    # Mock data_sources.query (2025-09-03 API)
+    client.data_sources.query.return_value = {"results": []}
     # Mock pages.create
     client.pages.create.return_value = {"id": "new-project-page-123"}
     return client
@@ -74,7 +78,7 @@ class TestProjectSyncEngine:
         monkeypatch.setenv("NOTION_TOKEN", "test-token")
 
         # Mock finding existing project
-        mock_notion_client.request.return_value = {
+        mock_notion_client.data_sources.query.return_value = {
             "results": [{"id": "existing-project-456"}]
         }
 
@@ -113,7 +117,7 @@ class TestProjectSyncEngine:
         assert was_created is False
         assert page_id == "cached-project-789"
         # No API calls needed
-        assert mock_notion_client.request.call_count == 0
+        assert mock_notion_client.data_sources.query.call_count == 0
         assert mock_notion_client.pages.create.call_count == 0
 
     def test_dry_run_mode(self, sample_config: Path, mock_notion_client, monkeypatch):

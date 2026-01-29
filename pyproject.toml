@@ -1,6 +1,6 @@
 [project]
 name = "bmadnotion"
-version = "0.2.5"
+version = "0.2.6"
 description = "Sync BMAD project artifacts to Notion - Pages and Databases"
 readme = "README.md"
 license = { text = "MIT" }

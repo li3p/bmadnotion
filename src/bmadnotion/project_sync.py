@@ -93,16 +93,20 @@ class ProjectSyncEngine:
         database_id = db_config.database_id
         key_property = db_config.key_property
 
-        # Query database for matching key using raw request
-        # notion-client 2.x doesn't have databases.query method
-        response = self.client.request(
-            path=f"databases/{database_id}/query",
-            method="POST",
-            body={
-                "filter": {
-                    "property": key_property,
-                    "rich_text": {"equals": project_key},
-                },
+        # Get data_source_id from database (required for 2025-09-03 API)
+        db = self.client.databases.retrieve(database_id=database_id)
+        data_sources = db.get("data_sources", [])
+        if not data_sources:
+            return None  # No data sources, can't query
+
+        ds_id = data_sources[0]["id"]
+
+        # Query using data_sources endpoint
+        response = self.client.data_sources.query(
+            data_source_id=ds_id,
+            filter={
+                "property": key_property,
+                "rich_text": {"equals": project_key},
             },
         )
 
