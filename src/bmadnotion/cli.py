@@ -208,7 +208,7 @@ def init(project: str | None, skip_notion: bool, force: bool):
         for name in ["projects", "sprints", "tasks"]:
             db_id = db_ids.get(name)
             if db_id:
-                click.echo(f"  {name.capitalize()}: {db_id[:8]}...")
+                click.echo(f"  {name.capitalize()}: {db_id}")
             else:
                 click.secho(f"  {name.capitalize()}: Not found", fg="yellow")
 
