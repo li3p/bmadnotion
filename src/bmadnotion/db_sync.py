@@ -71,6 +71,11 @@ class DbSyncEngine:
 
         # Scan sprint status
         epics, stories = self.scanner.scan_sprint_status()
+
+        # Filter stories if require_story_file is enabled
+        if self.config.database_sync.tasks.require_story_file:
+            stories = [s for s in stories if s.file_path is not None]
+
         total_epics = len(epics)
         total_stories = len(stories)
 

@@ -170,8 +170,12 @@ class BMADScanner:
         Returns:
             Story object.
         """
-        # Extract title from key
+        # Extract story number and title from key
         parts = key.split("-", 2)
+        story_num = ""
+        if len(parts) >= 2:
+            # Convert "1-5" to "1.5"
+            story_num = f"{parts[0]}.{parts[1]}"
         if len(parts) >= 3:
             title = parts[2].replace("-", " ").title()
         else:
@@ -190,6 +194,10 @@ class BMADScanner:
 
             # Extract title from file content
             title = self._extract_title(content, title)
+
+        # Prepend story number to title
+        if story_num:
+            title = f"{story_num} {title}"
 
         return Story(
             key=key,

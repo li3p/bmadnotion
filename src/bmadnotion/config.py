@@ -74,6 +74,8 @@ class TasksDbConfig(BaseModel):
         "review": "Review",
         "done": "Done",
     })
+    # Only sync stories that have a dedicated markdown file
+    require_story_file: bool = False
 
 
 class ProjectsDbConfig(BaseModel):
