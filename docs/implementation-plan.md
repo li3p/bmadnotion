@@ -1,7 +1,7 @@
 # bmadnotion 实现计划
 
 > 最后更新: 2026-01-29
-> 状态: 实施中 (Phase 1)
+> 状态: 实施中 (Phase 2 完成)
 
 ## 项目概述
 
@@ -144,13 +144,13 @@ implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"
 
 ### Task 1.3: 数据模型
 
-**状态**: `pending`
+**状态**: `done` ✅ (2026-01-29)
 
 **验收标准**:
-- [ ] AC1: Document 模型能表示 planning-artifacts 文档
-- [ ] AC2: Epic/Story 模型能表示 sprint 数据
-- [ ] AC3: SyncState 模型能追踪同步状态
-- [ ] AC4: 模型支持序列化/反序列化
+- [x] AC1: Document 模型能表示 planning-artifacts 文档
+- [x] AC2: Epic/Story 模型能表示 sprint 数据
+- [x] AC3: SyncState 模型能追踪同步状态
+- [x] AC4: 模型支持序列化/反序列化
 
 **验收测试** (`tests/test_models.py`):
 ```python
@@ -218,14 +218,14 @@ def test_sync_state_serialization():
 
 ### Task 1.4: SQLite 存储层
 
-**状态**: `pending`
+**状态**: `done` ✅ (2026-01-29)
 
 **验收标准**:
-- [ ] AC1: 能创建/打开项目数据库文件
-- [ ] AC2: 能保存和读取 PageSyncState
-- [ ] AC3: 能保存和读取 DbSyncState
-- [ ] AC4: 支持按 local_path/local_key 查询
-- [ ] AC5: 数据库文件位于 `.bmadnotion/` 目录
+- [x] AC1: 能创建/打开项目数据库文件
+- [x] AC2: 能保存和读取 PageSyncState
+- [x] AC3: 能保存和读取 DbSyncState
+- [x] AC4: 支持按 local_path/local_key 查询
+- [x] AC5: 数据库文件位于 `.bmadnotion/` 目录
 
 **验收测试** (`tests/test_store.py`):
 ```python
@@ -285,14 +285,14 @@ def test_save_and_get_db_state(tmp_path):
 
 ### Task 1.5: 文件扫描器
 
-**状态**: `pending`
+**状态**: `done` ✅ (2026-01-29)
 
 **验收标准**:
-- [ ] AC1: 能扫描 planning-artifacts 目录中的文档
-- [ ] AC2: 能解析 sprint-status.yaml 获取 Epic/Story 列表
-- [ ] AC3: 能读取 Epic 文件提取标题
-- [ ] AC4: 能读取 Story 文件提取内容
-- [ ] AC5: 正确处理文件不存在的情况
+- [x] AC1: 能扫描 planning-artifacts 目录中的文档
+- [x] AC2: 能解析 sprint-status.yaml 获取 Epic/Story 列表
+- [x] AC3: 能读取 Epic 文件提取标题
+- [x] AC4: 能读取 Story 文件提取内容
+- [x] AC5: 正确处理文件不存在的情况
 
 **验收测试** (`tests/test_scanner.py`):
 ```python
@@ -381,13 +381,13 @@ def test_scan_handles_missing_files(tmp_path):
 
 ### Task 2.1: Page 同步引擎核心
 
-**状态**: `pending`
+**状态**: `done` ✅ (2026-01-29)
 
 **验收标准**:
-- [ ] AC1: 能将 Markdown 文档创建为 Notion Page
-- [ ] AC2: 能更新已存在的 Notion Page
-- [ ] AC3: 使用 content hash 判断是否需要同步
-- [ ] AC4: 同步后更新 Store 中的状态
+- [x] AC1: 能将 Markdown 文档创建为 Notion Page
+- [x] AC2: 能更新已存在的 Notion Page
+- [x] AC3: 使用 content hash 判断是否需要同步
+- [x] AC4: 同步后更新 Store 中的状态
 
 **验收测试** (`tests/test_page_sync.py`):
 ```python
@@ -473,13 +473,13 @@ def test_sync_updates_store(tmp_path, sample_bmad_project, mock_notion_client):
 
 ### Task 2.2: Page Sync CLI
 
-**状态**: `pending`
+**状态**: `done` ✅ (2026-01-29)
 
 **验收标准**:
-- [ ] AC1: `bmadnotion sync pages` 执行 Page 同步
-- [ ] AC2: `--force` 参数强制全量同步
-- [ ] AC3: `--dry-run` 参数预览变更
-- [ ] AC4: 同步结果显示统计信息
+- [x] AC1: `bmadnotion sync pages` 执行 Page 同步
+- [x] AC2: `--force` 参数强制全量同步
+- [x] AC3: `--dry-run` 参数预览变更
+- [x] AC4: 同步结果显示统计信息
 
 **验收测试** (`tests/test_cli_page_sync.py`):
 ```python
@@ -743,8 +743,8 @@ def test_sync_db_shows_stats(cli_runner, tmp_path, sample_bmad_project, mock_not
 | 1 | 1.3 数据模型 | `done` ✅ | 2026-01-29 |
 | 1 | 1.4 SQLite 存储层 | `done` ✅ | 2026-01-29 |
 | 1 | 1.5 文件扫描器 | `done` ✅ | 2026-01-29 |
-| 2 | 2.1 Page 同步引擎 | `pending` | - |
-| 2 | 2.2 Page Sync CLI | `pending` | - |
+| 2 | 2.1 Page 同步引擎 | `done` ✅ | 2026-01-29 |
+| 2 | 2.2 Page Sync CLI | `done` ✅ | 2026-01-29 |
 | 3 | 3.1 Database 同步引擎 | `pending` | - |
 | 3 | 3.2 Database Sync CLI | `pending` | - |
 | 3 | 3.3 组合同步命令 | `pending` | - |

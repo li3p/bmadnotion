@@ -1,8 +1,23 @@
 """bmadnotion CLI - Command line interface for BMAD to Notion sync."""
 
+from pathlib import Path
+
 import click
 
 from bmadnotion import __version__
+from bmadnotion.config import ConfigNotFoundError, TokenNotFoundError, load_config
+from bmadnotion.store import Store
+
+# Import NotionClient from marknotion for use in commands
+try:
+    from marknotion import NotionClient
+except ImportError:
+    NotionClient = None  # type: ignore
+
+
+def get_project_root() -> Path:
+    """Get the project root (current working directory)."""
+    return Path.cwd()
 
 
 @click.group()
@@ -55,9 +70,59 @@ def sync_pages(force: bool, dry_run: bool):
 
     Syncs documents like PRD, Architecture, and UX Design to Notion pages.
     """
+    from bmadnotion.page_sync import PageSyncEngine
+
+    project_root = get_project_root()
+
+    # Load configuration
+    try:
+        config = load_config(project_root)
+    except ConfigNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    # Check if page sync is enabled
+    if not config.page_sync.enabled:
+        click.echo("Page sync is disabled in configuration.")
+        return
+
+    # Get Notion token
+    try:
+        token = config.get_notion_token()
+    except TokenNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    # Create Notion client
+    if NotionClient is None:
+        click.echo("Error: marknotion is not installed.", err=True)
+        raise SystemExit(1)
+
+    client = NotionClient(token=token)
+    store = Store(project_root)
+    engine = PageSyncEngine(client, store, config)
+
+    # Perform sync
     mode = "[DRY RUN] " if dry_run else ""
     click.echo(f"{mode}Syncing pages...")
-    # TODO: Implement page sync
+
+    result = engine.sync(force=force, dry_run=dry_run)
+
+    # Display results
+    if dry_run:
+        click.echo(f"Would create: {result.created}")
+        click.echo(f"Would update: {result.updated}")
+        click.echo(f"Would skip: {result.skipped}")
+    else:
+        click.echo(f"Created: {result.created}")
+        click.echo(f"Updated: {result.updated}")
+        click.echo(f"Skipped: {result.skipped}")
+
+    if result.failed > 0:
+        click.echo(f"Failed: {result.failed}", err=True)
+        for error in result.errors:
+            click.echo(f"  - {error}", err=True)
+
     click.echo("Done.")
 
 

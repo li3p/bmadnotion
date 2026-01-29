@@ -18,6 +18,7 @@ from bmadnotion.models import (
 )
 from bmadnotion.store import Store
 from bmadnotion.scanner import BMADScanner, SprintStatusNotFoundError
+from bmadnotion.page_sync import PageSyncEngine
 
 __all__ = [
     "__version__",
@@ -38,4 +39,6 @@ __all__ = [
     # Scanner
     "BMADScanner",
     "SprintStatusNotFoundError",
+    # Page Sync
+    "PageSyncEngine",
 ]

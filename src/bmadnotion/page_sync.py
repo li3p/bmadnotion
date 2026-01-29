@@ -1,0 +1,145 @@
+"""Page sync engine for syncing planning artifacts to Notion pages."""
+
+from __future__ import annotations
+
+from marknotion import markdown_to_blocks
+
+from bmadnotion.config import Config
+from bmadnotion.models import Document, PageSyncState, SyncResult
+from bmadnotion.scanner import BMADScanner
+from bmadnotion.store import Store
+
+
+class PageSyncEngine:
+    """Engine for syncing planning artifacts to Notion pages.
+
+    Syncs documents like PRD, Architecture, UX Design to Notion pages.
+    Uses content hash to detect changes and avoid unnecessary syncs.
+    """
+
+    def __init__(self, client, store: Store, config: Config):
+        """Initialize the page sync engine.
+
+        Args:
+            client: Notion client instance.
+            store: SQLite store for tracking sync state.
+            config: Loaded configuration.
+        """
+        self.client = client
+        self.store = store
+        self.config = config
+        self.scanner = BMADScanner(config)
+
+    def sync(self, force: bool = False, dry_run: bool = False) -> SyncResult:
+        """Sync planning artifacts to Notion pages.
+
+        Args:
+            force: If True, sync all documents regardless of changes.
+            dry_run: If True, report what would be done without making changes.
+
+        Returns:
+            SyncResult with statistics about the sync operation.
+        """
+        # Check if page sync is enabled
+        if not self.config.page_sync.enabled:
+            return SyncResult()
+
+        # Scan documents
+        documents = self.scanner.scan_documents()
+
+        created = 0
+        updated = 0
+        skipped = 0
+        failed = 0
+        errors: list[str] = []
+
+        for doc in documents:
+            try:
+                result = self._sync_document(doc, force=force, dry_run=dry_run)
+                if result == "created":
+                    created += 1
+                elif result == "updated":
+                    updated += 1
+                elif result == "skipped":
+                    skipped += 1
+            except Exception as e:
+                failed += 1
+                errors.append(f"Failed to sync {doc.path.name}: {e}")
+
+        return SyncResult(
+            created=created,
+            updated=updated,
+            skipped=skipped,
+            failed=failed,
+            errors=errors,
+        )
+
+    def _sync_document(
+        self, doc: Document, force: bool, dry_run: bool
+    ) -> str:
+        """Sync a single document.
+
+        Args:
+            doc: Document to sync.
+            force: Force sync regardless of changes.
+            dry_run: Don't make actual changes.
+
+        Returns:
+            Action taken: "created", "updated", or "skipped".
+        """
+        # Get local path relative to planning_artifacts
+        local_path = doc.path.name
+
+        # Check existing state
+        state = self.store.get_page_state(local_path)
+
+        # Determine if sync is needed
+        needs_sync = force or state is None or state.content_hash != doc.content_hash
+
+        if not needs_sync:
+            return "skipped"
+
+        # Convert markdown to Notion blocks
+        blocks = markdown_to_blocks(doc.content)
+
+        if dry_run:
+            # Report what would be done
+            return "created" if state is None else "updated"
+
+        if state is None:
+            # Create new page
+            page = self.client.create_page(
+                parent_id=self.config.page_sync.parent_page_id,
+                title=doc.title,
+            )
+            page_id = page["id"]
+
+            # Add content blocks
+            self.client.append_blocks(page_id, blocks)
+
+            # Save state
+            self.store.save_page_state(PageSyncState(
+                local_path=local_path,
+                notion_page_id=page_id,
+                last_synced_mtime=doc.mtime,
+                content_hash=doc.content_hash,
+            ))
+
+            return "created"
+        else:
+            # Update existing page
+            page_id = state.notion_page_id
+
+            # Clear existing content and add new blocks
+            self.client.clear_page_content(page_id)
+            self.client.append_blocks(page_id, blocks)
+
+            # Update state
+            self.store.save_page_state(PageSyncState(
+                local_path=local_path,
+                notion_page_id=page_id,
+                last_synced_mtime=doc.mtime,
+                content_hash=doc.content_hash,
+            ))
+
+            return "updated"
