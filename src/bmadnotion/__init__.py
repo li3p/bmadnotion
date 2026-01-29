@@ -16,6 +16,7 @@ from bmadnotion.models import (
     Story,
     SyncResult,
 )
+from bmadnotion.store import Store
 
 __all__ = [
     "__version__",
@@ -31,4 +32,6 @@ __all__ = [
     "PageSyncState",
     "Story",
     "SyncResult",
+    # Store
+    "Store",
 ]
