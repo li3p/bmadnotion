@@ -76,13 +76,13 @@ def test_cli_help(cli_runner):
 
 ### Task 1.2: 配置系统
 
-**状态**: `pending`
+**状态**: `done` ✅ (2026-01-29)
 
 **验收标准**:
-- [ ] AC1: 能加载 `.bmadnotion.yaml` 配置文件
-- [ ] AC2: 缺少配置文件时给出明确错误
-- [ ] AC3: 支持从环境变量读取 Notion Token
-- [ ] AC4: 支持从 `_bmad/bmm/config.yaml` 自动发现路径
+- [x] AC1: 能加载 `.bmadnotion.yaml` 配置文件
+- [x] AC2: 缺少配置文件时给出明确错误
+- [x] AC3: 支持从环境变量读取 Notion Token
+- [x] AC4: 支持从 `_bmad/bmm/config.yaml` 自动发现路径
 
 **验收测试** (`tests/test_config.py`):
 ```python
@@ -131,14 +131,14 @@ implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"
 ```
 
 **任务清单**:
-- [ ] 1.2.1 定义 `Config` Pydantic 模型
-- [ ] 1.2.2 实现 `load_config()` 函数
-- [ ] 1.2.3 实现 BMAD 路径自动发现
-- [ ] 1.2.4 实现环境变量 Token 读取
+- [x] 1.2.1 定义 `Config` Pydantic 模型
+- [x] 1.2.2 实现 `load_config()` 函数
+- [x] 1.2.3 实现 BMAD 路径自动发现
+- [x] 1.2.4 实现环境变量 Token 读取
 
 **产出文件**:
 - `src/bmadnotion/config.py`
-- `tests/test_config.py`
+- `tests/test_config.py` (9 个测试)
 
 ---
 
@@ -739,7 +739,7 @@ def test_sync_db_shows_stats(cli_runner, tmp_path, sample_bmad_project, mock_not
 | Phase | Task | 状态 | 完成日期 |
 |-------|------|------|----------|
 | 1 | 1.1 项目初始化 | `done` ✅ | 2026-01-29 |
-| 1 | 1.2 配置系统 | `pending` | - |
+| 1 | 1.2 配置系统 | `done` ✅ | 2026-01-29 |
 | 1 | 1.3 数据模型 | `pending` | - |
 | 1 | 1.4 SQLite 存储层 | `pending` | - |
 | 1 | 1.5 文件扫描器 | `pending` | - |
