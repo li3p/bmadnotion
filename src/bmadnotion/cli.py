@@ -307,12 +307,16 @@ def init(project: str | None, skip_notion: bool, force: bool):
             notion_client = Client(auth=token)
             store = Store(project_root)
 
-            # Check if project exists
-            response = notion_client.databases.query(
-                database_id=db_ids["projects"],
-                filter={
-                    "property": "BMADProject",
-                    "rich_text": {"equals": project_name},
+            # Check if project exists using raw request
+            # notion-client 2.x doesn't have databases.query method
+            response = notion_client.request(
+                path=f"databases/{db_ids['projects']}/query",
+                method="POST",
+                body={
+                    "filter": {
+                        "property": "BMADProject",
+                        "rich_text": {"equals": project_name},
+                    },
                 },
             )
 

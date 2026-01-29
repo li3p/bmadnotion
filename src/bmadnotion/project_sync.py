@@ -93,12 +93,16 @@ class ProjectSyncEngine:
         database_id = db_config.database_id
         key_property = db_config.key_property
 
-        # Query database for matching key using official notion-client
-        response = self.client.databases.query(
-            database_id=database_id,
-            filter={
-                "property": key_property,
-                "rich_text": {"equals": project_key},
+        # Query database for matching key using raw request
+        # notion-client 2.x doesn't have databases.query method
+        response = self.client.request(
+            path=f"databases/{database_id}/query",
+            method="POST",
+            body={
+                "filter": {
+                    "property": key_property,
+                    "rich_text": {"equals": project_key},
+                },
             },
         )
 

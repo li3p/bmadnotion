@@ -1,6 +1,6 @@
 """bmadnotion - Sync BMAD project artifacts to Notion."""
 
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 
 from bmadnotion.config import (
     Config,

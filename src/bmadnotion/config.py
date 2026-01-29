@@ -33,7 +33,7 @@ class NotionConfig(BaseModel):
     """Notion API configuration."""
 
     token_env: str = "NOTION_TOKEN"
-    workspace_page_id: str
+    workspace_page_id: str | None = None
 
 
 class PathsConfig(BaseModel):
