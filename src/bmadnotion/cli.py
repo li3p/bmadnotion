@@ -25,6 +25,20 @@ def get_project_root() -> Path:
     return Path.cwd()
 
 
+def _get_command_prefix() -> str:
+    """Detect how the CLI was invoked and return appropriate command prefix.
+
+    Returns 'uvx bmadnotion' if run via uvx, otherwise 'bmad'.
+    """
+    import sys
+
+    argv0 = sys.argv[0] if sys.argv else ""
+    # uvx runs from temp directories or contains 'uvx' in path
+    if "/.cache/uv/" in argv0 or "/uvx/" in argv0 or "uv-cache" in argv0:
+        return "uvx bmadnotion"
+    return "bmad"
+
+
 @click.group()
 @click.version_option(version=__version__, prog_name="bmadnotion")
 def cli():
@@ -360,13 +374,14 @@ def init(project: str | None, skip_notion: bool, force: bool):
     click.secho("Setup complete!", fg="green")
     click.echo("")
     click.echo("Next steps:")
+    cmd = _get_command_prefix()
     if not token or skip_notion:
         click.echo("  1. Set NOTION_TOKEN environment variable")
         click.echo("  2. Update database IDs in .bmadnotion.yaml")
-        click.echo("  3. Run 'bmad setup-db' to add sync key fields")
-        click.echo("  4. Run 'bmad sync' to sync your project")
+        click.echo(f"  3. Run '{cmd} setup-db' to add sync key fields")
+        click.echo(f"  4. Run '{cmd} sync' to sync your project")
     else:
-        click.echo("  Run 'bmad sync' to sync your project")
+        click.echo(f"  Run '{cmd} sync' to sync your project")
 
 
 def _get_or_create_project(
@@ -949,7 +964,8 @@ def config_set_db(
     config_path = project_root / ".bmadnotion.yaml"
 
     if not config_path.exists():
-        click.echo("Error: .bmadnotion.yaml not found. Run 'bmad init' first.", err=True)
+        cmd = _get_command_prefix()
+        click.echo(f"Error: .bmadnotion.yaml not found. Run '{cmd} init' first.", err=True)
         raise SystemExit(1)
 
     # If any ID is provided manually, use those
