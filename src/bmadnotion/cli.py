@@ -364,11 +364,23 @@ def status():
                 else:
                     stories_synced += 1
 
-            click.echo(f"  Epics:   Synced: {epics_synced}, Pending: {epics_pending}, Changed: {epics_changed}")
-            click.echo(f"  Stories: Synced: {stories_synced}, Pending: {stories_pending}, Changed: {stories_changed}")
+            click.echo(
+                f"  Epics:   Synced: {epics_synced}, "
+                f"Pending: {epics_pending}, Changed: {epics_changed}"
+            )
+            click.echo(
+                f"  Stories: Synced: {stories_synced}, "
+                f"Pending: {stories_pending}, Changed: {stories_changed}"
+            )
 
-            if epics_pending == 0 and epics_changed == 0 and stories_pending == 0 and stories_changed == 0:
-                click.echo(f"\n  ✓ All items up to date")
+            all_synced = (
+                epics_pending == 0
+                and epics_changed == 0
+                and stories_pending == 0
+                and stories_changed == 0
+            )
+            if all_synced:
+                click.echo("\n  ✓ All items up to date")
 
         except SprintStatusNotFoundError:
             click.echo("  No sprint-status.yaml found")
@@ -388,7 +400,6 @@ def config():
 @config.command("show")
 def config_show():
     """Show current configuration."""
-    import yaml
 
     project_root = get_project_root()
 

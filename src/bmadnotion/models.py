@@ -8,7 +8,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field
 
-
 # Type aliases for status values
 EpicStatus = Literal["backlog", "in-progress", "done"]
 StoryStatus = Literal["backlog", "ready-for-dev", "in-progress", "review", "done"]

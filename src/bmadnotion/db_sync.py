@@ -99,7 +99,12 @@ class DbSyncEngine:
         state = self.store.get_db_state(epic.key)
 
         # For epics, we use mtime to detect changes (no content hash)
-        needs_sync = force or state is None or (epic.mtime and state.last_synced_mtime != epic.mtime)
+        mtime_changed = (
+            state is not None
+            and epic.mtime
+            and state.last_synced_mtime != epic.mtime
+        )
+        needs_sync = force or state is None or mtime_changed
 
         if not needs_sync and state:
             return ("skipped", state.notion_page_id)
@@ -177,9 +182,17 @@ class DbSyncEngine:
 
         # For stories, use content hash if available, otherwise mtime
         if story.content_hash:
-            needs_sync = force or state is None or state.content_hash != story.content_hash
+            hash_changed = (
+                state is not None and state.content_hash != story.content_hash
+            )
+            needs_sync = force or state is None or hash_changed
         else:
-            needs_sync = force or state is None or (story.mtime and state.last_synced_mtime != story.mtime)
+            mtime_changed = (
+                state is not None
+                and story.mtime
+                and state.last_synced_mtime != story.mtime
+            )
+            needs_sync = force or state is None or mtime_changed
 
         if not needs_sync:
             return "skipped"
