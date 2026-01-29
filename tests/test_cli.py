@@ -18,9 +18,11 @@ class TestCLIBasic:
 
     def test_cli_version(self, cli_runner: CliRunner):
         """CLI --version should show version."""
+        from bmadnotion import __version__
+
         result = cli_runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        assert __version__ in result.output
 
     def test_sync_pages_help(self, cli_runner: CliRunner):
         """sync pages --help should show help."""
