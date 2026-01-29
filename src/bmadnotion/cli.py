@@ -616,6 +616,183 @@ def config_show():
         click.echo(f"  Tasks DB: {config.database_sync.tasks.database_id}")
 
 
+@config.command("set-db")
+@click.option("--projects", help="Projects database ID")
+@click.option("--sprints", help="Sprints database ID")
+@click.option("--tasks", help="Tasks database ID")
+@click.option("--create-project", is_flag=True, help="Create Project row in database")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+def config_set_db(
+    projects: str | None,
+    sprints: str | None,
+    tasks: str | None,
+    create_project: bool,
+    yes: bool,
+):
+    """Configure database IDs for sync.
+
+    If no IDs are provided, searches Notion for databases named
+    "Projects", "Sprints", and "Tasks" and prompts for confirmation.
+
+    Use --create-project to also create a Project row in the database.
+
+    Examples:
+        bmad config set-db                    # Auto-detect from Notion
+        bmad config set-db --projects abc123  # Set specific ID
+        bmad config set-db -y                 # Auto-detect, skip confirmation
+        bmad config set-db -y --create-project  # Auto-detect and create project
+    """
+    import os
+    import re
+
+    import yaml
+
+    project_root = get_project_root()
+    config_path = project_root / ".bmadnotion.yaml"
+
+    if not config_path.exists():
+        click.echo("Error: .bmadnotion.yaml not found. Run 'bmad init' first.", err=True)
+        raise SystemExit(1)
+
+    # If any ID is provided manually, use those
+    if projects or sprints or tasks:
+        db_ids = {
+            "projects": projects,
+            "sprints": sprints,
+            "tasks": tasks,
+        }
+    else:
+        # Auto-detect from Notion
+        token = os.environ.get("NOTION_TOKEN")
+        if not token:
+            # Try loading from config
+            try:
+                cfg = load_config(project_root)
+                token = cfg.get_notion_token()
+            except (ConfigNotFoundError, TokenNotFoundError):
+                pass
+
+        if not token:
+            click.echo("Error: NOTION_TOKEN not set. Export it or add to .env", err=True)
+            raise SystemExit(1)
+
+        if NotionClient is None:
+            click.echo("Error: marknotion is not installed.", err=True)
+            raise SystemExit(1)
+
+        click.echo("Searching for databases in Notion...")
+        client = NotionClient(token=token, on_retry=None)
+
+        db_ids = {}
+        for db_name in ["Projects", "Sprints", "Tasks"]:
+            results = client.search(db_name, object_type="database")
+            # Find exact match by title
+            for result in results:
+                title_parts = result.get("title", [])
+                title = "".join(t.get("plain_text", "") for t in title_parts)
+                if title.lower() == db_name.lower():
+                    # Extract ID from URL (workaround for notion-client ID bug)
+                    url = result.get("url", "")
+                    match = re.search(r"([a-f0-9]{32})", url, re.IGNORECASE)
+                    if match:
+                        h = match.group(1).lower()
+                        formatted_id = f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
+                        db_ids[db_name.lower()] = formatted_id
+                    break
+
+        # Show results
+        click.echo("")
+        click.echo("Found databases:")
+        for name in ["projects", "sprints", "tasks"]:
+            db_id = db_ids.get(name)
+            status = db_id if db_id else click.style("Not found", fg="yellow")
+            click.echo(f"  {name.capitalize()}: {status}")
+
+        if not any(db_ids.values()):
+            click.echo("")
+            click.echo("No databases found. Make sure your integration has access to them.")
+            raise SystemExit(1)
+
+        # Confirm
+        if not yes:
+            click.echo("")
+            if not click.confirm("Update .bmadnotion.yaml with these IDs?"):
+                click.echo("Aborted.")
+                return
+
+    # Update config file
+    with open(config_path) as f:
+        config_content = yaml.safe_load(f)
+
+    if "database_sync" not in config_content:
+        config_content["database_sync"] = {"enabled": True}
+
+    db_sync = config_content["database_sync"]
+
+    if db_ids.get("projects"):
+        if "projects" not in db_sync:
+            db_sync["projects"] = {}
+        db_sync["projects"]["database_id"] = db_ids["projects"]
+
+    if db_ids.get("sprints"):
+        if "sprints" not in db_sync:
+            db_sync["sprints"] = {}
+        db_sync["sprints"]["database_id"] = db_ids["sprints"]
+
+    if db_ids.get("tasks"):
+        if "tasks" not in db_sync:
+            db_sync["tasks"] = {}
+        db_sync["tasks"]["database_id"] = db_ids["tasks"]
+
+    with open(config_path, "w") as f:
+        yaml.dump(config_content, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+    click.echo("")
+    click.echo(f"Updated {config_path}")
+
+    # Create project if requested
+    if create_project and db_ids.get("projects"):
+        click.echo("")
+        click.echo("Creating Project row...")
+
+        # Need token for API call
+        token = os.environ.get("NOTION_TOKEN")
+        if not token:
+            try:
+                cfg = load_config(project_root)
+                token = cfg.get_notion_token()
+            except (ConfigNotFoundError, TokenNotFoundError):
+                click.echo("Error: NOTION_TOKEN not available for project creation", err=True)
+                raise SystemExit(1)
+
+        # Reload config to get project name
+        cfg = load_config(project_root)
+        project_name = cfg.project
+
+        # Create project row using notion-client
+        notion_client = Client(auth=token)
+        try:
+            page = notion_client.pages.create(
+                parent={"database_id": db_ids["projects"]},
+                properties={
+                    "Project name": {"title": [{"text": {"content": project_name}}]},
+                    "BMADProject": {"rich_text": [{"text": {"content": project_name}}]},
+                },
+            )
+            click.echo(f"Created Project: {project_name} (ID: {page['id']})")
+        except Exception as e:
+            click.echo(f"Warning: Could not create project: {e}", err=True)
+            click.echo("You may need to run 'bmad setup-db' first to add BMADProject field.")
+
+    click.echo("")
+    click.echo("Next steps:")
+    if not create_project:
+        click.echo("  1. Run 'bmad setup-db' to add sync key fields")
+        click.echo("  2. Run 'bmad sync' to sync your project")
+    else:
+        click.echo("  1. Run 'bmad sync' to sync your project")
+
+
 @cli.command("setup-db")
 def setup_db():
     """Set up required fields in Notion databases.
