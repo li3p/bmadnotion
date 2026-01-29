@@ -36,93 +36,325 @@ def cli():
     pass
 
 
-@cli.command()
-@click.option("--project", "-p", help="Project name")
-@click.option("--force", "-f", is_flag=True, help="Overwrite existing config")
-def init(project: str | None, force: bool):
-    """Initialize bmadnotion configuration.
+def _detect_bmad_project(project_root: Path) -> dict | None:
+    """Detect BMAD project configuration.
 
-    Creates a .bmadnotion.yaml configuration file in the current directory.
+    Returns:
+        Dict with project info or None if not a BMAD project.
     """
+    import yaml
+
+    bmad_config_path = project_root / "_bmad" / "bmm" / "config.yaml"
+    if not bmad_config_path.exists():
+        return None
+
+    with open(bmad_config_path) as f:
+        bmad_config = yaml.safe_load(f) or {}
+
+    # Resolve paths
+    def resolve_path(p: str) -> Path:
+        return Path(p.replace("{project-root}", str(project_root)))
+
+    planning_artifacts = resolve_path(
+        bmad_config.get("planning_artifacts", "_bmad-output/planning-artifacts")
+    )
+    implementation_artifacts = resolve_path(
+        bmad_config.get("implementation_artifacts", "_bmad-output/implementation-artifacts")
+    )
+
+    return {
+        "project_name": bmad_config.get("project_name", project_root.name),
+        "planning_artifacts": planning_artifacts,
+        "implementation_artifacts": implementation_artifacts,
+    }
+
+
+def _scan_planning_artifacts(planning_dir: Path) -> list[dict]:
+    """Scan planning artifacts directory for documents to sync."""
+    documents = []
+    artifact_patterns = [
+        ("prd.md", "PRD"),
+        ("architecture.md", "Architecture"),
+        ("ux-design-specification.md", "UX Design"),
+        ("epics.md", "Epics"),
+    ]
+
+    for filename, title in artifact_patterns:
+        path = planning_dir / filename
+        if path.exists():
+            documents.append({"path": filename, "title": title})
+
+    # Also scan for product-brief-*.md
+    for brief in planning_dir.glob("product-brief-*.md"):
+        documents.append({"path": brief.name, "title": "Product Brief"})
+
+    return documents
+
+
+def _auto_detect_databases(token: str) -> dict[str, str]:
+    """Auto-detect database IDs from Notion."""
+    import re
+
+    if NotionClient is None:
+        return {}
+
+    click.echo("Searching for databases in Notion...")
+    client = NotionClient(token=token, on_retry=None)
+
+    db_ids = {}
+    for db_name in ["Projects", "Sprints", "Tasks"]:
+        results = client.search(db_name, object_type="database")
+        for result in results:
+            title_parts = result.get("title", [])
+            title = "".join(t.get("plain_text", "") for t in title_parts)
+            if title.lower() == db_name.lower():
+                url = result.get("url", "")
+                match = re.search(r"([a-f0-9]{32})", url, re.IGNORECASE)
+                if match:
+                    h = match.group(1).lower()
+                    formatted_id = f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
+                    db_ids[db_name.lower()] = formatted_id
+                break
+
+    return db_ids
+
+
+@cli.command()
+@click.option("--project", "-p", help="Project name (overrides auto-detected name)")
+@click.option("--skip-notion", is_flag=True, help="Skip Notion setup (config file only)")
+@click.option("--force", "-f", is_flag=True, help="Overwrite existing config")
+def init(project: str | None, skip_notion: bool, force: bool):
+    """Initialize bmadnotion for a BMAD project.
+
+    This command performs a complete setup:
+    1. Detects BMAD project structure
+    2. Scans for planning artifacts and sprint status
+    3. Auto-detects Notion database IDs
+    4. Sets up required database fields
+    5. Creates Project row in Notion
+
+    Requires: _bmad/bmm/config.yaml (BMAD project)
+    """
+    import os
+
+    import yaml
+
     project_root = get_project_root()
     config_path = project_root / ".bmadnotion.yaml"
 
-    # Check if config already exists
+    # Step 1: Detect BMAD project
+    click.echo("Detecting BMAD project...")
+    bmad_info = _detect_bmad_project(project_root)
+
+    if not bmad_info:
+        click.secho("Error: Not a BMAD project.", fg="red", err=True)
+        click.echo("Required: _bmad/bmm/config.yaml")
+        click.echo("Run 'bmad-installer init' to initialize a BMAD project first.")
+        raise SystemExit(1)
+
+    project_name = project or bmad_info["project_name"]
+    planning_dir = bmad_info["planning_artifacts"]
+    impl_dir = bmad_info["implementation_artifacts"]
+
+    click.echo(f"  Project: {project_name}")
+    click.echo(f"  Planning: {planning_dir}")
+    click.echo(f"  Implementation: {impl_dir}")
+
+    # Step 2: Scan artifacts
+    click.echo("")
+    click.echo("Scanning artifacts...")
+
+    documents = _scan_planning_artifacts(planning_dir)
+    click.echo(f"  Found {len(documents)} planning documents")
+    for doc in documents:
+        click.echo(f"    - {doc['path']}")
+
+    sprint_status = impl_dir / "sprint-status.yaml"
+    has_sprint_status = sprint_status.exists()
+    if has_sprint_status:
+        click.echo("  Found sprint-status.yaml")
+    else:
+        click.secho("  No sprint-status.yaml (run sprint-planning workflow)", fg="yellow")
+
+    # Check existing config
     if config_path.exists() and not force:
-        click.echo(f"Configuration file already exists: {config_path}")
-        click.echo("Use --force to overwrite.")
-        return
+        click.echo("")
+        click.secho(f"Config already exists: {config_path}", fg="yellow")
+        if not click.confirm("Overwrite?"):
+            click.echo("Aborted.")
+            return
 
-    # Use project name from option or directory name
+    # Step 3: Get Notion token
+    click.echo("")
+    token = os.environ.get("NOTION_TOKEN")
+
+    if not token and not skip_notion:
+        click.echo("NOTION_TOKEN not found in environment.")
+        token = click.prompt("Enter your Notion integration token", hide_input=True, default="")
+        if token:
+            # Offer to save to .env
+            env_path = project_root / ".env"
+            if click.confirm("Save token to .env file?"):
+                with open(env_path, "a") as f:
+                    f.write(f"\nNOTION_TOKEN={token}\n")
+                click.echo(f"  Saved to {env_path}")
+
+    # Step 4: Auto-detect databases
+    db_ids = {}
+    if token and not skip_notion:
+        db_ids = _auto_detect_databases(token)
+        click.echo("")
+        click.echo("Found databases:")
+        for name in ["projects", "sprints", "tasks"]:
+            db_id = db_ids.get(name)
+            if db_id:
+                click.echo(f"  {name.capitalize()}: {db_id[:8]}...")
+            else:
+                click.secho(f"  {name.capitalize()}: Not found", fg="yellow")
+
+        if not any(db_ids.values()):
+            click.echo("")
+            click.secho("No databases found. Make sure your integration has access.", fg="yellow")
+
+    # Step 5: Prompt for project name confirmation
+    click.echo("")
     if not project:
-        project = project_root.name
+        confirmed_name = click.prompt("Project name", default=project_name)
+        project_name = confirmed_name
 
-    click.echo(f"Initializing bmadnotion for project: {project}")
+    # Step 6: Generate config
+    click.echo("")
+    click.echo("Creating configuration...")
 
-    # Generate default configuration
-    config_content = f'''# bmadnotion configuration
-# Generated by: bmadnotion init
+    config_data = {
+        "project": project_name,
+        "notion": {
+            "token_env": "NOTION_TOKEN",
+        },
+        "paths": {
+            "planning_artifacts": str(planning_dir.relative_to(project_root)),
+            "implementation_artifacts": str(impl_dir.relative_to(project_root)),
+            "sprint_status": str((impl_dir / "sprint-status.yaml").relative_to(project_root)),
+        },
+        "page_sync": {
+            "enabled": len(documents) > 0,
+            "documents": [
+                {"path": d["path"], "title": f"{d['title']} - {{project}}"}
+                for d in documents
+            ],
+        },
+        "database_sync": {
+            "enabled": has_sprint_status,
+            "projects": {
+                "database_id": db_ids.get("projects", ""),
+                "key_property": "BMADProject",
+                "name_property": "Project name",
+            },
+            "sprints": {
+                "database_id": db_ids.get("sprints", ""),
+                "key_property": "BMADEpic",
+                "status_mapping": {
+                    "backlog": "Not Started",
+                    "in-progress": "In Progress",
+                    "done": "Done",
+                },
+            },
+            "tasks": {
+                "database_id": db_ids.get("tasks", ""),
+                "key_property": "BMADStory",
+                "status_mapping": {
+                    "backlog": "Backlog",
+                    "ready-for-dev": "Ready",
+                    "in-progress": "In Progress",
+                    "review": "Review",
+                    "done": "Done",
+                },
+            },
+        },
+    }
 
-project: {project}
+    with open(config_path, "w") as f:
+        yaml.dump(config_data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
-notion:
-  # Environment variable containing your Notion API token
-  token_env: NOTION_TOKEN
-  # Your Notion workspace page ID (for reference)
-  workspace_page_id: "your-workspace-page-id"
+    click.echo(f"  Created {config_path}")
 
-# Page Sync: Sync planning artifacts to Notion Pages
-page_sync:
-  enabled: true
-  # Parent page ID (fallback if Projects database not configured)
-  # When Projects database is configured, documents become sub-pages of the Project row
-  parent_page_id: "your-parent-page-id"
-  documents:
-    - path: "prd.md"
-      title: "PRD - {project}"
-    - path: "architecture.md"
-      title: "Architecture - {project}"
-    - path: "ux-design-specification.md"
-      title: "UX Design - {project}"
+    # Step 7: Setup database fields
+    if token and db_ids and not skip_notion:
+        click.echo("")
+        click.echo("Setting up database fields...")
 
-# Database Sync: Sync sprint status to Notion Databases
-database_sync:
-  enabled: true
-  # Projects database (from Agile template)
-  projects:
-    database_id: "your-projects-database-id"
-    key_property: "BMADProject"
-    name_property: "Project name"
-  # Sprints database (for Epics)
-  sprints:
-    database_id: "your-sprints-database-id"
-    key_property: "BMADEpic"
-    status_mapping:
-      backlog: "Not Started"
-      in-progress: "In Progress"
-      done: "Done"
-  # Tasks database (for Stories)
-  tasks:
-    database_id: "your-tasks-database-id"
-    key_property: "BMADStory"
-    status_mapping:
-      backlog: "Backlog"
-      ready-for-dev: "Ready"
-      in-progress: "In Progress"
-      review: "Review"
-      done: "Done"
+        from bmadnotion.schema import setup_all_databases
 
-# Run 'bmad setup-db' after configuring database IDs to add required fields
-'''
+        try:
+            cfg = load_config(project_root)
+            notion_client = Client(auth=token)
+            results = setup_all_databases(notion_client, cfg)
 
-    config_path.write_text(config_content)
-    click.echo(f"Created {config_path}")
+            if results:
+                for db_type, fields in results.items():
+                    click.echo(f"  Added to {db_type}: {', '.join(fields)}")
+            else:
+                click.echo("  All fields already exist")
+        except Exception as e:
+            click.secho(f"  Warning: {e}", fg="yellow")
+
+    # Step 8: Create Project row
+    if token and db_ids.get("projects") and not skip_notion:
+        click.echo("")
+        click.echo("Creating Project row...")
+
+        try:
+            notion_client = Client(auth=token)
+            store = Store(project_root)
+
+            # Check if project exists
+            response = notion_client.databases.query(
+                database_id=db_ids["projects"],
+                filter={
+                    "property": "BMADProject",
+                    "rich_text": {"equals": project_name},
+                },
+            )
+
+            if response.get("results"):
+                page_id = response["results"][0]["id"]
+                click.echo(f"  Project already exists: {project_name}")
+            else:
+                page = notion_client.pages.create(
+                    parent={"database_id": db_ids["projects"]},
+                    properties={
+                        "Project name": {"title": [{"text": {"content": project_name}}]},
+                        "BMADProject": {"rich_text": [{"text": {"content": project_name}}]},
+                    },
+                )
+                page_id = page["id"]
+                click.echo(f"  Created Project: {project_name}")
+
+            # Save to store
+            from bmadnotion.models import DbSyncState
+
+            state = DbSyncState(
+                local_key=f"project:{project_name}",
+                entity_type="project",
+                notion_page_id=page_id,
+            )
+            store.save_db_state(state)
+
+        except Exception as e:
+            click.secho(f"  Warning: Could not create project: {e}", fg="yellow")
+
+    # Done
+    click.echo("")
+    click.secho("Setup complete!", fg="green")
     click.echo("")
     click.echo("Next steps:")
-    click.echo("  1. Set your NOTION_TOKEN environment variable")
-    click.echo("  2. Update the page/database IDs in .bmadnotion.yaml")
-    click.echo("  3. Run 'bmad setup-db' to add sync key fields")
-    click.echo("  4. Run 'bmad sync' to sync your project")
+    if not token or skip_notion:
+        click.echo("  1. Set NOTION_TOKEN environment variable")
+        click.echo("  2. Update database IDs in .bmadnotion.yaml")
+        click.echo("  3. Run 'bmad setup-db' to add sync key fields")
+        click.echo("  4. Run 'bmad sync' to sync your project")
+    else:
+        click.echo("  Run 'bmad sync' to sync your project")
 
 
 def _get_or_create_project(
@@ -177,11 +409,20 @@ def sync(ctx, force: bool, dry_run: bool):
         _sync_all(force=force, dry_run=dry_run)
 
 
+def _check_gitignore(project_root: Path) -> bool:
+    """Check if .bmadnotion/ is in .gitignore."""
+    gitignore = project_root / ".gitignore"
+    if gitignore.exists():
+        content = gitignore.read_text()
+        return ".bmadnotion" in content or ".bmadnotion/" in content
+    return False
+
+
 def _sync_all(force: bool, dry_run: bool):
     """Sync all artifacts (pages and database) with shared Project context."""
     from bmadnotion.db_sync import DbSyncEngine
     from bmadnotion.page_sync import PageSyncEngine
-    from bmadnotion.scanner import SprintStatusNotFoundError
+    from bmadnotion.scanner import BMADScanner, SprintStatusNotFoundError
 
     project_root = get_project_root()
 
@@ -204,11 +445,52 @@ def _sync_all(force: bool, dry_run: bool):
         click.echo("Error: marknotion is not installed.", err=True)
         raise SystemExit(1)
 
-    marknotion_client = NotionClient(token=token)
+    marknotion_client = NotionClient(token=token, on_retry=None)
     notion_client = Client(auth=token)
     store = Store(project_root)
 
     mode = "[DRY RUN] " if dry_run else ""
+
+    # Show sync info header
+    click.echo(f"Project: {config.project}")
+    click.echo(f"State DB: {store.db_path}")
+    if not _check_gitignore(project_root):
+        click.secho("Note: Add '.bmadnotion/' to .gitignore", fg="yellow")
+    click.echo("")
+
+    # Scan and show what will be synced
+    scanner = BMADScanner(config)
+
+    if config.page_sync.enabled:
+        documents = scanner.scan_documents()
+        pending_docs = []
+        changed_docs = []
+        for doc in documents:
+            state = store.get_page_state(doc.path.name)
+            if state is None:
+                pending_docs.append(doc.path.name)
+            elif state.content_hash != doc.content_hash:
+                changed_docs.append(doc.path.name)
+
+        click.echo(f"Pages: {len(documents)} found")
+        if pending_docs:
+            click.echo(f"  New: {', '.join(pending_docs)}")
+        if changed_docs:
+            click.echo(f"  Changed: {', '.join(changed_docs)}")
+        if not pending_docs and not changed_docs and not force:
+            click.echo("  All up to date")
+
+    if config.database_sync.enabled:
+        try:
+            epics, stories = scanner.scan_sprint_status()
+            pending_epics = sum(1 for e in epics if not store.get_db_state(e.key))
+            pending_stories = sum(1 for s in stories if not store.get_db_state(s.key))
+            click.echo(f"Epics: {len(epics)} found ({pending_epics} new)")
+            click.echo(f"Stories: {len(stories)} found ({pending_stories} new)")
+        except SprintStatusNotFoundError:
+            click.echo("Sprint status: Not found")
+
+    click.echo("")
 
     # Get or create Project row first
     project_page_id = None
@@ -620,31 +902,22 @@ def config_show():
 @click.option("--projects", help="Projects database ID")
 @click.option("--sprints", help="Sprints database ID")
 @click.option("--tasks", help="Tasks database ID")
-@click.option("--create-project", is_flag=True, help="Create Project row in database")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
 def config_set_db(
     projects: str | None,
     sprints: str | None,
     tasks: str | None,
-    create_project: bool,
     yes: bool,
 ):
-    """Configure database IDs for sync.
+    """Update database IDs in configuration.
 
-    If no IDs are provided, searches Notion for databases named
-    "Projects", "Sprints", and "Tasks" and prompts for confirmation.
-
-    Use --create-project to also create a Project row in the database.
+    If no IDs are provided, auto-detects from Notion.
 
     Examples:
         bmad config set-db                    # Auto-detect from Notion
         bmad config set-db --projects abc123  # Set specific ID
         bmad config set-db -y                 # Auto-detect, skip confirmation
-        bmad config set-db -y --create-project  # Auto-detect and create project
     """
-    import os
-    import re
-
     import yaml
 
     project_root = get_project_root()
@@ -663,42 +936,14 @@ def config_set_db(
         }
     else:
         # Auto-detect from Notion
-        token = os.environ.get("NOTION_TOKEN")
-        if not token:
-            # Try loading from config
-            try:
-                cfg = load_config(project_root)
-                token = cfg.get_notion_token()
-            except (ConfigNotFoundError, TokenNotFoundError):
-                pass
-
-        if not token:
-            click.echo("Error: NOTION_TOKEN not set. Export it or add to .env", err=True)
+        try:
+            cfg = load_config(project_root)
+            token = cfg.get_notion_token()
+        except (ConfigNotFoundError, TokenNotFoundError) as e:
+            click.echo(f"Error: {e}", err=True)
             raise SystemExit(1)
 
-        if NotionClient is None:
-            click.echo("Error: marknotion is not installed.", err=True)
-            raise SystemExit(1)
-
-        click.echo("Searching for databases in Notion...")
-        client = NotionClient(token=token, on_retry=None)
-
-        db_ids = {}
-        for db_name in ["Projects", "Sprints", "Tasks"]:
-            results = client.search(db_name, object_type="database")
-            # Find exact match by title
-            for result in results:
-                title_parts = result.get("title", [])
-                title = "".join(t.get("plain_text", "") for t in title_parts)
-                if title.lower() == db_name.lower():
-                    # Extract ID from URL (workaround for notion-client ID bug)
-                    url = result.get("url", "")
-                    match = re.search(r"([a-f0-9]{32})", url, re.IGNORECASE)
-                    if match:
-                        h = match.group(1).lower()
-                        formatted_id = f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
-                        db_ids[db_name.lower()] = formatted_id
-                    break
+        db_ids = _auto_detect_databases(token)
 
         # Show results
         click.echo("")
@@ -729,68 +974,17 @@ def config_set_db(
 
     db_sync = config_content["database_sync"]
 
-    if db_ids.get("projects"):
-        if "projects" not in db_sync:
-            db_sync["projects"] = {}
-        db_sync["projects"]["database_id"] = db_ids["projects"]
-
-    if db_ids.get("sprints"):
-        if "sprints" not in db_sync:
-            db_sync["sprints"] = {}
-        db_sync["sprints"]["database_id"] = db_ids["sprints"]
-
-    if db_ids.get("tasks"):
-        if "tasks" not in db_sync:
-            db_sync["tasks"] = {}
-        db_sync["tasks"]["database_id"] = db_ids["tasks"]
+    for name in ["projects", "sprints", "tasks"]:
+        if db_ids.get(name):
+            if name not in db_sync:
+                db_sync[name] = {}
+            db_sync[name]["database_id"] = db_ids[name]
 
     with open(config_path, "w") as f:
         yaml.dump(config_content, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
     click.echo("")
     click.echo(f"Updated {config_path}")
-
-    # Create project if requested
-    if create_project and db_ids.get("projects"):
-        click.echo("")
-        click.echo("Creating Project row...")
-
-        # Need token for API call
-        token = os.environ.get("NOTION_TOKEN")
-        if not token:
-            try:
-                cfg = load_config(project_root)
-                token = cfg.get_notion_token()
-            except (ConfigNotFoundError, TokenNotFoundError):
-                click.echo("Error: NOTION_TOKEN not available for project creation", err=True)
-                raise SystemExit(1)
-
-        # Reload config to get project name
-        cfg = load_config(project_root)
-        project_name = cfg.project
-
-        # Create project row using notion-client
-        notion_client = Client(auth=token)
-        try:
-            page = notion_client.pages.create(
-                parent={"database_id": db_ids["projects"]},
-                properties={
-                    "Project name": {"title": [{"text": {"content": project_name}}]},
-                    "BMADProject": {"rich_text": [{"text": {"content": project_name}}]},
-                },
-            )
-            click.echo(f"Created Project: {project_name} (ID: {page['id']})")
-        except Exception as e:
-            click.echo(f"Warning: Could not create project: {e}", err=True)
-            click.echo("You may need to run 'bmad setup-db' first to add BMADProject field.")
-
-    click.echo("")
-    click.echo("Next steps:")
-    if not create_project:
-        click.echo("  1. Run 'bmad setup-db' to add sync key fields")
-        click.echo("  2. Run 'bmad sync' to sync your project")
-    else:
-        click.echo("  1. Run 'bmad sync' to sync your project")
 
 
 @cli.command("setup-db")

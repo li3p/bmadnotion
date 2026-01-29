@@ -39,59 +39,37 @@ pip install bmadnotion
 
 ## Quick Start
 
-### 1. Initialize Configuration
+### 1. Set Notion Token
+
+```bash
+export NOTION_TOKEN=your_notion_integration_token
+```
+
+### 2. Initialize (One-Step Setup)
 
 ```bash
 cd your-bmad-project
 bmad init
 ```
 
-This creates `.bmadnotion.yaml` configuration file.
+This smart command:
+- Detects BMAD project structure
+- Scans planning artifacts (PRD, Architecture, etc.)
+- Auto-detects Notion database IDs
+- Sets up required database fields
+- Creates Project row in Notion
 
-### 2. Configure Notion
-
-Set your Notion integration token (choose one):
-
-```bash
-# Option A: Use .env file (recommended)
-echo "NOTION_TOKEN=your_notion_integration_token" >> .env
-
-# Option B: Export in shell
-export NOTION_TOKEN=your_notion_integration_token
-```
-
-Edit `.bmadnotion.yaml` to set your database IDs:
-
-```yaml
-project: my-project
-notion:
-  token_env: NOTION_TOKEN
-  workspace_page_id: "your-workspace-page-id"
-
-database_sync:
-  enabled: true
-  projects:
-    database_id: "your-projects-database-id"
-  sprints:
-    database_id: "your-sprints-database-id"
-  tasks:
-    database_id: "your-tasks-database-id"
-```
-
-### 3. Set Up Database Fields
+### 3. Sync
 
 ```bash
-bmad setup-db
-```
-
-This adds required sync key fields (BMADProject, BMADEpic, BMADStory) to your databases.
-
-### 4. Sync
-
-```bash
-# Sync everything
 bmad sync
+```
 
+That's it! Your BMAD project is now synced to Notion.
+
+### Other Commands
+
+```bash
 # Sync only planning documents (Pages)
 bmad sync pages
 
@@ -103,11 +81,8 @@ bmad sync --dry-run
 
 # Force full sync (ignore cache)
 bmad sync --force
-```
 
-### 5. Check Status
-
-```bash
+# Check sync status
 bmad status
 ```
 
@@ -247,10 +222,13 @@ your-project/
 ## CLI Reference
 
 ```bash
-# Initialize project
-bmad init [--project NAME] [--force]
+# Initialize (one-step setup - requires BMAD project)
+bmad init [--project NAME] [--skip-notion] [--force]
 
-# Set up database fields (adds BMADProject, BMADEpic, BMADStory)
+# Re-detect database IDs
+bmad config set-db [--projects ID] [--sprints ID] [--tasks ID]
+
+# Re-setup database fields
 bmad setup-db
 
 # Sync all
@@ -302,18 +280,13 @@ For each database (Projects, Sprints, Tasks):
 2. Click "..." menu → "Add connections"
 3. Select your integration
 
-### 3. Get Database IDs
-
-Database IDs are in the URL:
-- `https://notion.so/**abc123def456**?v=...` → ID is `abc123def456`
-
-### 4. Run Setup
+### 3. Run Init
 
 ```bash
-bmad setup-db
+bmad init
 ```
 
-This adds the required sync key fields if they don't exist.
+This auto-detects your databases, sets up fields, and creates the Project row.
 
 ## Troubleshooting
 

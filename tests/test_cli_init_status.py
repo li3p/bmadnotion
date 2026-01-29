@@ -14,6 +14,37 @@ def cli_runner():
 
 
 @pytest.fixture
+def bmad_project(tmp_path: Path) -> Path:
+    """Create a BMAD project structure for testing init command."""
+    # Create _bmad/bmm/config.yaml (required for init)
+    bmad_dir = tmp_path / "_bmad" / "bmm"
+    bmad_dir.mkdir(parents=True)
+    (bmad_dir / "config.yaml").write_text("""
+project_name: test-project
+planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"
+implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"
+""")
+
+    # Create planning-artifacts
+    planning = tmp_path / "_bmad-output" / "planning-artifacts"
+    planning.mkdir(parents=True)
+    (planning / "prd.md").write_text("# PRD\n\nContent here.")
+    (planning / "architecture.md").write_text("# Architecture\n\nContent here.")
+
+    # Create implementation-artifacts with sprint-status
+    impl = tmp_path / "_bmad-output" / "implementation-artifacts"
+    impl.mkdir(parents=True)
+    (impl / "sprint-status.yaml").write_text("""
+development_status:
+  epic-1: in-progress
+  1-1-backend-setup: done
+""")
+    (impl / "1-1-backend-setup.md").write_text("# Story 1.1\n\nContent.")
+
+    return tmp_path
+
+
+@pytest.fixture
 def sample_project(tmp_path: Path) -> Path:
     """Create a sample project for testing."""
     # Create config
@@ -62,73 +93,125 @@ development_status:
 class TestInitCommand:
     """Tests for 'bmadnotion init' command."""
 
-    def test_init_creates_config(self, cli_runner: CliRunner, tmp_path: Path):
+    def test_init_requires_bmad_project(self, cli_runner: CliRunner, tmp_path: Path):
+        """Should fail if not a BMAD project."""
+        from bmadnotion.cli import cli
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            result = cli_runner.invoke(cli, ["init", "--skip-notion"])
+        finally:
+            os.chdir(original_cwd)
+
+        assert result.exit_code == 1
+        assert "not a bmad project" in result.output.lower()
+
+    def test_init_creates_config(self, cli_runner: CliRunner, bmad_project: Path):
         """AC1: Should create .bmadnotion.yaml configuration file."""
         from bmadnotion.cli import cli
 
         original_cwd = os.getcwd()
         try:
-            os.chdir(tmp_path)
-            result = cli_runner.invoke(cli, ["init", "--project", "my-project"])
+            os.chdir(bmad_project)
+            # Use --skip-notion to avoid Notion API calls, provide input for project name prompt
+            result = cli_runner.invoke(
+                cli,
+                ["init", "--skip-notion"],
+                input="test-project\n",  # Project name confirmation
+            )
         finally:
             os.chdir(original_cwd)
 
-        assert result.exit_code == 0
-        config_file = tmp_path / ".bmadnotion.yaml"
+        assert result.exit_code == 0, f"Failed with output: {result.output}"
+        config_file = bmad_project / ".bmadnotion.yaml"
         assert config_file.exists()
         content = config_file.read_text()
-        assert "my-project" in content
+        assert "test-project" in content
         assert "notion" in content
 
-    def test_init_prompts_for_project_name(self, cli_runner: CliRunner, tmp_path: Path):
-        """Should use directory name if project not specified."""
+    def test_init_uses_project_option(self, cli_runner: CliRunner, bmad_project: Path):
+        """Should use --project option to skip prompt."""
         from bmadnotion.cli import cli
 
         original_cwd = os.getcwd()
         try:
-            os.chdir(tmp_path)
-            result = cli_runner.invoke(cli, ["init"])
+            os.chdir(bmad_project)
+            result = cli_runner.invoke(
+                cli,
+                ["init", "--project", "my-project", "--skip-notion"],
+            )
         finally:
             os.chdir(original_cwd)
 
         assert result.exit_code == 0
-        config_file = tmp_path / ".bmadnotion.yaml"
+        config_file = bmad_project / ".bmadnotion.yaml"
         assert config_file.exists()
+        content = config_file.read_text()
+        assert "my-project" in content
 
-    def test_init_warns_if_config_exists(self, cli_runner: CliRunner, tmp_path: Path):
+    def test_init_warns_if_config_exists(self, cli_runner: CliRunner, bmad_project: Path):
         """Should warn if config already exists."""
         from bmadnotion.cli import cli
 
         # Create existing config
-        (tmp_path / ".bmadnotion.yaml").write_text("project: existing")
+        (bmad_project / ".bmadnotion.yaml").write_text("project: existing")
 
         original_cwd = os.getcwd()
         try:
-            os.chdir(tmp_path)
-            result = cli_runner.invoke(cli, ["init"])
+            os.chdir(bmad_project)
+            result = cli_runner.invoke(
+                cli,
+                ["init", "--skip-notion"],
+                input="n\n",  # Don't overwrite
+            )
         finally:
             os.chdir(original_cwd)
 
-        # Should warn but not fail
-        assert "exists" in result.output.lower() or "already" in result.output.lower()
+        # Should ask about overwrite
+        assert "overwrite" in result.output.lower() or "exists" in result.output.lower()
+        # Original content should be preserved
+        content = (bmad_project / ".bmadnotion.yaml").read_text()
+        assert "existing" in content
 
-    def test_init_force_overwrites(self, cli_runner: CliRunner, tmp_path: Path):
+    def test_init_force_overwrites(self, cli_runner: CliRunner, bmad_project: Path):
         """Should overwrite config with --force."""
         from bmadnotion.cli import cli
 
         # Create existing config
-        (tmp_path / ".bmadnotion.yaml").write_text("project: old-project")
+        (bmad_project / ".bmadnotion.yaml").write_text("project: old-project")
 
         original_cwd = os.getcwd()
         try:
-            os.chdir(tmp_path)
-            result = cli_runner.invoke(cli, ["init", "--project", "new-project", "--force"])
+            os.chdir(bmad_project)
+            result = cli_runner.invoke(
+                cli,
+                ["init", "--project", "new-project", "--force", "--skip-notion"],
+            )
         finally:
             os.chdir(original_cwd)
 
         assert result.exit_code == 0
-        content = (tmp_path / ".bmadnotion.yaml").read_text()
+        content = (bmad_project / ".bmadnotion.yaml").read_text()
         assert "new-project" in content
+
+    def test_init_detects_artifacts(self, cli_runner: CliRunner, bmad_project: Path):
+        """Should detect planning artifacts."""
+        from bmadnotion.cli import cli
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(bmad_project)
+            result = cli_runner.invoke(
+                cli,
+                ["init", "--project", "test", "--skip-notion"],
+            )
+        finally:
+            os.chdir(original_cwd)
+
+        assert result.exit_code == 0
+        assert "prd.md" in result.output.lower()
+        assert "architecture.md" in result.output.lower()
 
 
 class TestStatusCommand:

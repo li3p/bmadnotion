@@ -42,7 +42,9 @@ class TestCLIBasic:
         assert result.exit_code == 0
         assert "status" in result.output.lower()
 
-    def test_init_command(self, cli_runner: CliRunner):
-        """init command should run."""
-        result = cli_runner.invoke(cli, ["init"])
+    def test_init_command_help(self, cli_runner: CliRunner):
+        """init --help should show help."""
+        result = cli_runner.invoke(cli, ["init", "--help"])
         assert result.exit_code == 0
+        assert "bmad" in result.output.lower()
+        assert "project" in result.output.lower()
