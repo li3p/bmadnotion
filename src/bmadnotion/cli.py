@@ -5,9 +5,6 @@ from pathlib import Path
 import click
 from dotenv import load_dotenv
 
-# Load .env file if present (supports NOTION_TOKEN in .env)
-load_dotenv()
-
 from bmadnotion import __version__
 from bmadnotion.config import ConfigNotFoundError, TokenNotFoundError, load_config
 from bmadnotion.store import Store
@@ -17,6 +14,9 @@ try:
     from marknotion import NotionClient
 except ImportError:
     NotionClient = None  # type: ignore
+
+# Load .env file if present (supports NOTION_TOKEN in .env)
+load_dotenv()
 
 
 def get_project_root() -> Path:
