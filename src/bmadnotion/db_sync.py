@@ -14,8 +14,8 @@ from bmadnotion.store import Store
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from notion_client import Client as OfficialClient
     from marknotion import NotionClient as MarknotionClient
+    from notion_client import Client as OfficialClient
 
 
 class DbSyncEngine:
