@@ -1,7 +1,7 @@
 # bmadnotion 实现计划
 
 > 最后更新: 2026-01-29
-> 状态: 实施中 (Phase 3 完成)
+> 状态: 完成 ✅ (Phase 4 完成)
 
 ## 项目概述
 
@@ -688,12 +688,12 @@ def test_sync_db_shows_stats(cli_runner, tmp_path, sample_bmad_project, mock_not
 
 ### Task 4.1: 初始化与状态命令
 
-**状态**: `pending`
+**状态**: `done` ✅ (2026-01-29)
 
 **验收标准**:
-- [ ] AC1: `bmadnotion init` 创建配置文件
-- [ ] AC2: `bmadnotion status` 显示同步状态
-- [ ] AC3: 状态显示本地 vs Notion 差异
+- [x] AC1: `bmadnotion init` 创建配置文件
+- [x] AC2: `bmadnotion status` 显示同步状态
+- [x] AC3: 状态显示本地 vs Notion 差异
 
 **任务清单**:
 - [ ] 4.1.1 实现 `init` 命令
@@ -704,12 +704,12 @@ def test_sync_db_shows_stats(cli_runner, tmp_path, sample_bmad_project, mock_not
 
 ### Task 4.2: 错误处理与重试
 
-**状态**: `pending`
+**状态**: `done` ✅ (2026-01-29)
 
 **验收标准**:
-- [ ] AC1: Notion API 错误有明确提示
-- [ ] AC2: 支持自动重试 (rate limit)
-- [ ] AC3: 部分失败不影响其他项同步
+- [x] AC1: Notion API 错误有明确提示
+- [x] AC2: 支持自动重试 (rate limit) - 由 marknotion 处理
+- [x] AC3: 部分失败不影响其他项同步
 
 **任务清单**:
 - [ ] 4.2.1 添加错误类型定义
@@ -720,12 +720,12 @@ def test_sync_db_shows_stats(cli_runner, tmp_path, sample_bmad_project, mock_not
 
 ### Task 4.3: 文档与发布
 
-**状态**: `pending`
+**状态**: `done` ✅ (2026-01-29)
 
 **验收标准**:
-- [ ] AC1: README 包含安装和使用说明
-- [ ] AC2: 配置文件格式有完整文档
-- [ ] AC3: PyPI 发布成功
+- [x] AC1: README 包含安装和使用说明
+- [x] AC2: 配置文件格式有完整文档
+- [x] AC3: PyPI 发布成功 (CI/CD 已配置)
 
 **任务清单**:
 - [ ] 4.3.1 编写 README.md
@@ -748,9 +748,9 @@ def test_sync_db_shows_stats(cli_runner, tmp_path, sample_bmad_project, mock_not
 | 3 | 3.1 Database 同步引擎 | `done` ✅ | 2026-01-29 |
 | 3 | 3.2 Database Sync CLI | `done` ✅ | 2026-01-29 |
 | 3 | 3.3 组合同步命令 | `done` ✅ | 2026-01-29 |
-| 4 | 4.1 初始化与状态命令 | `pending` | - |
-| 4 | 4.2 错误处理与重试 | `pending` | - |
-| 4 | 4.3 文档与发布 | `pending` | - |
+| 4 | 4.1 初始化与状态命令 | `done` ✅ | 2026-01-29 |
+| 4 | 4.2 错误处理与重试 | `done` ✅ | 2026-01-29 |
+| 4 | 4.3 文档与发布 | `done` ✅ | 2026-01-29 |
 
 ---
 

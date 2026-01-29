@@ -206,6 +206,52 @@ bmadnotion status
 bmadnotion config show
 ```
 
+## Notion Setup
+
+### 1. Create a Notion Integration
+
+1. Go to [Notion Integrations](https://www.notion.so/my-integrations)
+2. Click "New integration"
+3. Give it a name (e.g., "bmadnotion")
+4. Select the workspace
+5. Copy the "Internal Integration Token"
+
+### 2. Share Pages/Databases with Integration
+
+1. Open the parent page where documents will be synced
+2. Click "..." menu → "Add connections"
+3. Select your integration
+4. Repeat for any databases you want to sync to
+
+### 3. Get Page/Database IDs
+
+Page and database IDs are in the URL:
+- `https://notion.so/Your-Page-**abc123def456**` → ID is `abc123def456`
+- `https://notion.so/**abc123def456**?v=...` → ID is `abc123def456`
+
+## Troubleshooting
+
+### "Token not found" error
+```bash
+# Make sure NOTION_TOKEN is set
+export NOTION_TOKEN=your_token_here
+
+# Verify it's set
+echo $NOTION_TOKEN
+```
+
+### "Page not found" error
+- Ensure the integration has access to the page
+- Check that the page ID is correct
+
+### "Database not found" error
+- Ensure the integration has access to the database
+- Verify database ID in configuration
+
+### Sync not detecting changes
+- bmadnotion uses content hash to detect changes
+- Use `--force` to sync everything regardless of cache
+
 ## Requirements
 
 - Python 3.13+

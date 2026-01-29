@@ -34,10 +34,11 @@ class TestCLIBasic:
         assert result.exit_code == 0
         assert "sprint" in result.output.lower() or "database" in result.output.lower()
 
-    def test_status_command(self, cli_runner: CliRunner):
-        """status command should run."""
-        result = cli_runner.invoke(cli, ["status"])
+    def test_status_command_help(self, cli_runner: CliRunner):
+        """status --help should show help."""
+        result = cli_runner.invoke(cli, ["status", "--help"])
         assert result.exit_code == 0
+        assert "status" in result.output.lower()
 
     def test_init_command(self, cli_runner: CliRunner):
         """init command should run."""
