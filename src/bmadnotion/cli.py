@@ -625,6 +625,11 @@ def sync_pages(force: bool, dry_run: bool):
     # Get or create Project row
     project_page_id = _get_or_create_project(notion_client, store, config, dry_run)
 
+    # Progress callback
+    def on_progress(doc_name: str, status: str, current: int, total: int) -> None:
+        symbol = {"created": "✓", "updated": "✓", "skipped": "○", "failed": "✗"}.get(status, "?")
+        click.echo(f"  [{current}/{total}] {symbol} {doc_name} ({status})")
+
     # Perform sync
     click.echo(f"{mode}Syncing pages...")
     engine = PageSyncEngine(marknotion_client, store, config)
@@ -632,6 +637,7 @@ def sync_pages(force: bool, dry_run: bool):
         force=force,
         dry_run=dry_run,
         project_page_id=project_page_id,
+        on_progress=on_progress,
     )
 
     # Display results
@@ -699,6 +705,12 @@ def sync_db(force: bool, dry_run: bool):
     # Get or create Project row
     project_page_id = _get_or_create_project(notion_client, store, config, dry_run)
 
+    # Progress callback
+    def on_progress(item_type: str, key: str, status: str, current: int, total: int) -> None:
+        symbol = {"created": "✓", "updated": "✓", "skipped": "○", "failed": "✗"}.get(status, "?")
+        prefix = "Epic" if item_type == "epic" else "Story"
+        click.echo(f"  [{current}/{total}] {symbol} {prefix}: {key} ({status})")
+
     # Perform sync
     click.echo(f"{mode}Syncing database...")
     engine = DbSyncEngine(marknotion_client, store, config)
@@ -708,6 +720,7 @@ def sync_db(force: bool, dry_run: bool):
             force=force,
             dry_run=dry_run,
             project_page_id=project_page_id,
+            on_progress=on_progress,
         )
     except SprintStatusNotFoundError as e:
         click.echo(f"Error: {e}", err=True)

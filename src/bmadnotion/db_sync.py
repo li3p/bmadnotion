@@ -12,6 +12,8 @@ from bmadnotion.scanner import BMADScanner
 from bmadnotion.store import Store
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from notion_client import Client as OfficialClient
     from marknotion import NotionClient as MarknotionClient
 
@@ -50,6 +52,7 @@ class DbSyncEngine:
         force: bool = False,
         dry_run: bool = False,
         project_page_id: str | None = None,
+        on_progress: "Callable[[str, str, str, int, int], None] | None" = None,
     ) -> DbSyncResult:
         """Sync sprint data to Notion databases.
 
@@ -57,6 +60,7 @@ class DbSyncEngine:
             force: If True, sync all items regardless of changes.
             dry_run: If True, report what would be done without making changes.
             project_page_id: Notion page ID of the Project row (for relation).
+            on_progress: Callback (type, key, status, current, total) called after each item.
 
         Returns:
             DbSyncResult with statistics about the sync operation.
@@ -67,12 +71,14 @@ class DbSyncEngine:
 
         # Scan sprint status
         epics, stories = self.scanner.scan_sprint_status()
+        total_epics = len(epics)
+        total_stories = len(stories)
 
         result = DbSyncResult()
 
         # First sync epics (needed for story relations)
         epic_id_map: dict[str, str] = {}  # epic_key -> notion_page_id
-        for epic in epics:
+        for i, epic in enumerate(epics, 1):
             try:
                 action, page_id = self._sync_epic(epic, force=force, dry_run=dry_run)
                 epic_id_map[epic.key] = page_id
@@ -82,12 +88,16 @@ class DbSyncEngine:
                     result.epics_updated += 1
                 elif action == "skipped":
                     result.epics_skipped += 1
+                if on_progress:
+                    on_progress("epic", epic.key, action, i, total_epics)
             except Exception as e:
                 result.epics_failed += 1
                 result.errors.append(f"Failed to sync epic {epic.key}: {e}")
+                if on_progress:
+                    on_progress("epic", epic.key, "failed", i, total_epics)
 
         # Then sync stories (with relations to epics and project)
-        for story in stories:
+        for i, story in enumerate(stories, 1):
             try:
                 epic_page_id = epic_id_map.get(story.epic_key)
                 action = self._sync_story(
@@ -103,9 +113,13 @@ class DbSyncEngine:
                     result.stories_updated += 1
                 elif action == "skipped":
                     result.stories_skipped += 1
+                if on_progress:
+                    on_progress("story", story.key, action, i, total_stories)
             except Exception as e:
                 result.stories_failed += 1
                 result.errors.append(f"Failed to sync story {story.key}: {e}")
+                if on_progress:
+                    on_progress("story", story.key, "failed", i, total_stories)
 
         return result
 

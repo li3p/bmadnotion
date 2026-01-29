@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from marknotion import markdown_to_blocks
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from bmadnotion.config import Config
 from bmadnotion.models import Document, PageSyncState, SyncResult
@@ -36,6 +41,7 @@ class PageSyncEngine:
         force: bool = False,
         dry_run: bool = False,
         project_page_id: str | None = None,
+        on_progress: "Callable[[str, str, int, int], None] | None" = None,
     ) -> SyncResult:
         """Sync planning artifacts to Notion pages.
 
@@ -44,6 +50,7 @@ class PageSyncEngine:
             dry_run: If True, report what would be done without making changes.
             project_page_id: Notion page ID of the Project row (parent for documents).
                            If not provided, uses config.page_sync.parent_page_id.
+            on_progress: Callback (doc_name, status, current, total) called after each doc.
 
         Returns:
             SyncResult with statistics about the sync operation.
@@ -62,6 +69,7 @@ class PageSyncEngine:
 
         # Scan documents
         documents = self.scanner.scan_documents()
+        total = len(documents)
 
         created = 0
         updated = 0
@@ -69,7 +77,7 @@ class PageSyncEngine:
         failed = 0
         errors: list[str] = []
 
-        for doc in documents:
+        for i, doc in enumerate(documents, 1):
             try:
                 result = self._sync_document(
                     doc,
@@ -83,9 +91,13 @@ class PageSyncEngine:
                     updated += 1
                 elif result == "skipped":
                     skipped += 1
+                if on_progress:
+                    on_progress(doc.path.name, result, i, total)
             except Exception as e:
                 failed += 1
                 errors.append(f"Failed to sync {doc.path.name}: {e}")
+                if on_progress:
+                    on_progress(doc.path.name, "failed", i, total)
 
         return SyncResult(
             created=created,
