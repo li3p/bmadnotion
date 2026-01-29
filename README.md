@@ -17,7 +17,15 @@ Sync [BMAD](https://docs.bmad-method.org/) project artifacts to Notion. Keep you
 
 ## Installation
 
-### As a CLI tool (recommended)
+### Try without installing (recommended)
+
+```bash
+# Run directly with uvx (no installation needed)
+uvx bmadnotion init
+uvx bmadnotion sync
+```
+
+### Install as a CLI tool
 
 ```bash
 # With uv (recommended)
@@ -49,7 +57,8 @@ export NOTION_TOKEN=your_notion_integration_token
 
 ```bash
 cd your-bmad-project
-bmad init
+uvx bmadnotion init
+# or if installed: bmad init
 ```
 
 This smart command:
@@ -62,7 +71,8 @@ This smart command:
 ### 3. Sync
 
 ```bash
-bmad sync
+uvx bmadnotion sync
+# or if installed: bmad sync
 ```
 
 That's it! Your BMAD project is now synced to Notion.
@@ -247,7 +257,7 @@ bmad status
 bmad config show
 ```
 
-> Note: `bmadnotion` command also works (alias for `bmad`).
+> **Tip:** Use `uvx bmadnotion <command>` to run without installation, or `bmad <command>` / `bmadnotion <command>` if installed.
 
 ## Notion Setup
 
@@ -319,6 +329,7 @@ echo $NOTION_TOKEN
 - Python 3.13+
 - Notion Integration Token with appropriate permissions:
   - Read/Write access to databases (Projects, Sprints, Tasks)
+- Notion API version 2025-09-03 (handled automatically by notion-client 2.x)
 
 ## Related Projects
 
