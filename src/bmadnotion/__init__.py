@@ -9,6 +9,7 @@ from bmadnotion.config import (
     load_config,
 )
 from bmadnotion.models import (
+    DbSyncResult,
     DbSyncState,
     Document,
     Epic,
@@ -19,6 +20,7 @@ from bmadnotion.models import (
 from bmadnotion.store import Store
 from bmadnotion.scanner import BMADScanner, SprintStatusNotFoundError
 from bmadnotion.page_sync import PageSyncEngine
+from bmadnotion.db_sync import DbSyncEngine
 
 __all__ = [
     "__version__",
@@ -28,6 +30,7 @@ __all__ = [
     "TokenNotFoundError",
     "load_config",
     # Models
+    "DbSyncResult",
     "DbSyncState",
     "Document",
     "Epic",
@@ -41,4 +44,6 @@ __all__ = [
     "SprintStatusNotFoundError",
     # Page Sync
     "PageSyncEngine",
+    # Database Sync
+    "DbSyncEngine",
 ]

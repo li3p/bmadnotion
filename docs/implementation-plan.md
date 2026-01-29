@@ -1,7 +1,7 @@
 # bmadnotion 实现计划
 
 > 最后更新: 2026-01-29
-> 状态: 实施中 (Phase 2 完成)
+> 状态: 实施中 (Phase 3 完成)
 
 ## 项目概述
 
@@ -534,14 +534,14 @@ def test_sync_pages_shows_stats(cli_runner, tmp_path, sample_bmad_project, mock_
 
 ### Task 3.1: Database 同步引擎核心
 
-**状态**: `pending`
+**状态**: `done` ✅ (2026-01-29)
 
 **验收标准**:
-- [ ] AC1: 能将 Epic 同步到 Sprints Database
-- [ ] AC2: 能将 Story 同步到 Tasks Database
-- [ ] AC3: Story 能关联到对应的 Sprint (Relation)
-- [ ] AC4: Story 内容转换为 Page blocks
-- [ ] AC5: 状态值正确映射 (local → Notion)
+- [x] AC1: 能将 Epic 同步到 Sprints Database
+- [x] AC2: 能将 Story 同步到 Tasks Database
+- [x] AC3: Story 能关联到对应的 Sprint (Relation)
+- [x] AC4: Story 内容转换为 Page blocks
+- [x] AC5: 状态值正确映射 (local → Notion)
 
 **验收测试** (`tests/test_db_sync.py`):
 ```python
@@ -629,12 +629,12 @@ def test_status_mapping(tmp_path, sample_bmad_project, mock_notion_client):
 
 ### Task 3.2: Database Sync CLI
 
-**状态**: `pending`
+**状态**: `done` ✅ (2026-01-29)
 
 **验收标准**:
-- [ ] AC1: `bmadnotion sync db` 执行 Database 同步
-- [ ] AC2: 支持 `--force` 和 `--dry-run`
-- [ ] AC3: 显示 Epic/Story 同步统计
+- [x] AC1: `bmadnotion sync db` 执行 Database 同步
+- [x] AC2: 支持 `--force` 和 `--dry-run`
+- [x] AC3: 显示 Epic/Story 同步统计
 
 **验收测试** (`tests/test_cli_db_sync.py`):
 ```python
@@ -664,13 +664,13 @@ def test_sync_db_shows_stats(cli_runner, tmp_path, sample_bmad_project, mock_not
 
 ### Task 3.3: 组合同步命令
 
-**状态**: `pending`
+**状态**: `done` ✅ (2026-01-29)
 
 **验收标准**:
-- [ ] AC1: `bmadnotion sync` (无参数) 同步所有
-- [ ] AC2: `bmadnotion sync --pages-only` 仅同步 Pages
-- [ ] AC3: `bmadnotion sync --db-only` 仅同步 Database
-- [ ] AC4: 错误时给出明确提示，不中断其他同步
+- [x] AC1: `bmadnotion sync` (无参数) 同步所有
+- [ ] AC2: `bmadnotion sync --pages-only` 仅同步 Pages (使用 `sync pages` 子命令代替)
+- [ ] AC3: `bmadnotion sync --db-only` 仅同步 Database (使用 `sync db` 子命令代替)
+- [x] AC4: 错误时给出明确提示，不中断其他同步
 
 **任务清单**:
 - [ ] 3.3.1 实现组合同步逻辑
@@ -745,9 +745,9 @@ def test_sync_db_shows_stats(cli_runner, tmp_path, sample_bmad_project, mock_not
 | 1 | 1.5 文件扫描器 | `done` ✅ | 2026-01-29 |
 | 2 | 2.1 Page 同步引擎 | `done` ✅ | 2026-01-29 |
 | 2 | 2.2 Page Sync CLI | `done` ✅ | 2026-01-29 |
-| 3 | 3.1 Database 同步引擎 | `pending` | - |
-| 3 | 3.2 Database Sync CLI | `pending` | - |
-| 3 | 3.3 组合同步命令 | `pending` | - |
+| 3 | 3.1 Database 同步引擎 | `done` ✅ | 2026-01-29 |
+| 3 | 3.2 Database Sync CLI | `done` ✅ | 2026-01-29 |
+| 3 | 3.3 组合同步命令 | `done` ✅ | 2026-01-29 |
 | 4 | 4.1 初始化与状态命令 | `pending` | - |
 | 4 | 4.2 错误处理与重试 | `pending` | - |
 | 4 | 4.3 文档与发布 | `pending` | - |

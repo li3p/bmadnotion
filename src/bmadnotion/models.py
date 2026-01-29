@@ -162,3 +162,43 @@ class SyncResult(BaseModel):
     def total(self) -> int:
         """Total number of items processed."""
         return self.created + self.updated + self.skipped + self.failed
+
+
+class DbSyncResult(BaseModel):
+    """Result of a database sync operation (epics and stories)."""
+
+    epics_created: int = 0
+    """Number of new epics created."""
+
+    epics_updated: int = 0
+    """Number of existing epics updated."""
+
+    epics_skipped: int = 0
+    """Number of epics skipped (no changes)."""
+
+    epics_failed: int = 0
+    """Number of epics that failed to sync."""
+
+    stories_created: int = 0
+    """Number of new stories created."""
+
+    stories_updated: int = 0
+    """Number of existing stories updated."""
+
+    stories_skipped: int = 0
+    """Number of stories skipped (no changes)."""
+
+    stories_failed: int = 0
+    """Number of stories that failed to sync."""
+
+    errors: list[str] = Field(default_factory=list)
+    """Error messages for failed items."""
+
+    @computed_field
+    @property
+    def total(self) -> int:
+        """Total number of items processed."""
+        return (
+            self.epics_created + self.epics_updated + self.epics_skipped + self.epics_failed +
+            self.stories_created + self.stories_updated + self.stories_skipped + self.stories_failed
+        )

@@ -134,9 +134,79 @@ def sync_db(force: bool, dry_run: bool):
 
     Syncs Epics and Stories from sprint-status.yaml to Notion databases.
     """
+    from bmadnotion.db_sync import DbSyncEngine
+    from bmadnotion.scanner import SprintStatusNotFoundError
+
+    project_root = get_project_root()
+
+    # Load configuration
+    try:
+        config = load_config(project_root)
+    except ConfigNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    # Check if database sync is enabled
+    if not config.database_sync.enabled:
+        click.echo("Database sync is disabled in configuration.")
+        return
+
+    # Get Notion token
+    try:
+        token = config.get_notion_token()
+    except TokenNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    # Create Notion client
+    if NotionClient is None:
+        click.echo("Error: marknotion is not installed.", err=True)
+        raise SystemExit(1)
+
+    client = NotionClient(token=token)
+    store = Store(project_root)
+    engine = DbSyncEngine(client, store, config)
+
+    # Perform sync
     mode = "[DRY RUN] " if dry_run else ""
     click.echo(f"{mode}Syncing database...")
-    # TODO: Implement database sync
+
+    try:
+        result = engine.sync(force=force, dry_run=dry_run)
+    except SprintStatusNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    # Display results
+    click.echo("")
+    click.echo("Epics (Sprints):")
+    if dry_run:
+        click.echo(f"  Would create: {result.epics_created}")
+        click.echo(f"  Would update: {result.epics_updated}")
+        click.echo(f"  Would skip: {result.epics_skipped}")
+    else:
+        click.echo(f"  Created: {result.epics_created}")
+        click.echo(f"  Updated: {result.epics_updated}")
+        click.echo(f"  Skipped: {result.epics_skipped}")
+
+    click.echo("")
+    click.echo("Stories (Tasks):")
+    if dry_run:
+        click.echo(f"  Would create: {result.stories_created}")
+        click.echo(f"  Would update: {result.stories_updated}")
+        click.echo(f"  Would skip: {result.stories_skipped}")
+    else:
+        click.echo(f"  Created: {result.stories_created}")
+        click.echo(f"  Updated: {result.stories_updated}")
+        click.echo(f"  Skipped: {result.stories_skipped}")
+
+    if result.epics_failed > 0 or result.stories_failed > 0:
+        click.echo("")
+        click.echo(f"Failed: {result.epics_failed + result.stories_failed}", err=True)
+        for error in result.errors:
+            click.echo(f"  - {error}", err=True)
+
+    click.echo("")
     click.echo("Done.")
 
 
