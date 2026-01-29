@@ -1,6 +1,6 @@
 [project]
 name = "bmadnotion"
-version = "0.2.0"
+version = "0.2.1"
 description = "Sync BMAD project artifacts to Notion - Pages and Databases"
 readme = "README.md"
 license = { text = "MIT" }
@@ -88,6 +88,3 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
 ]
-
-[tool.uv.sources]
-marknotion = { path = "../marknotion", editable = true }
