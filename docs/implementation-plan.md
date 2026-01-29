@@ -742,7 +742,7 @@ def test_sync_db_shows_stats(cli_runner, tmp_path, sample_bmad_project, mock_not
 | 1 | 1.2 配置系统 | `done` ✅ | 2026-01-29 |
 | 1 | 1.3 数据模型 | `done` ✅ | 2026-01-29 |
 | 1 | 1.4 SQLite 存储层 | `done` ✅ | 2026-01-29 |
-| 1 | 1.5 文件扫描器 | `pending` | - |
+| 1 | 1.5 文件扫描器 | `done` ✅ | 2026-01-29 |
 | 2 | 2.1 Page 同步引擎 | `pending` | - |
 | 2 | 2.2 Page Sync CLI | `pending` | - |
 | 3 | 3.1 Database 同步引擎 | `pending` | - |

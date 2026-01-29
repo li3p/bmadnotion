@@ -17,6 +17,7 @@ from bmadnotion.models import (
     SyncResult,
 )
 from bmadnotion.store import Store
+from bmadnotion.scanner import BMADScanner, SprintStatusNotFoundError
 
 __all__ = [
     "__version__",
@@ -34,4 +35,7 @@ __all__ = [
     "SyncResult",
     # Store
     "Store",
+    # Scanner
+    "BMADScanner",
+    "SprintStatusNotFoundError",
 ]
