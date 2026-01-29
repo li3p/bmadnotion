@@ -1,7 +1,7 @@
 # bmadnotion 实现计划
 
 > 最后更新: 2026-01-29
-> 状态: 规划中
+> 状态: 实施中 (Phase 1)
 
 ## 项目概述
 
@@ -16,7 +16,7 @@ bmadnotion 是一个 BMAD 项目同步工具，用于将本地 BMAD 项目产物
 
 ### 技术栈
 
-- Python 3.11+
+- Python 3.13+
 - marknotion (Markdown ↔ Notion 转换)
 - SQLite (同步状态存储)
 - Click (CLI)
@@ -40,12 +40,12 @@ bmadnotion 是一个 BMAD 项目同步工具，用于将本地 BMAD 项目产物
 
 ### Task 1.1: 项目初始化
 
-**状态**: `pending`
+**状态**: `done` ✅ (2026-01-29)
 
 **验收标准**:
-- [ ] AC1: `uv run pytest` 能运行（即使无测试）
-- [ ] AC2: `uv run bmadnotion --help` 显示帮助信息
-- [ ] AC3: 项目结构符合规范
+- [x] AC1: `uv run pytest` 能运行（即使无测试）
+- [x] AC2: `uv run bmadnotion --help` 显示帮助信息
+- [x] AC3: 项目结构符合规范
 
 **验收测试** (`tests/test_cli.py`):
 ```python
@@ -57,16 +57,20 @@ def test_cli_help(cli_runner):
 ```
 
 **任务清单**:
-- [ ] 1.1.1 创建 `pyproject.toml`
-- [ ] 1.1.2 创建目录结构 `src/bmadnotion/`
-- [ ] 1.1.3 创建 `__init__.py` 和 `cli.py` 骨架
-- [ ] 1.1.4 配置 pytest
+- [x] 1.1.1 创建 `pyproject.toml`
+- [x] 1.1.2 创建目录结构 `src/bmadnotion/`
+- [x] 1.1.3 创建 `__init__.py` 和 `cli.py` 骨架
+- [x] 1.1.4 配置 pytest
 
 **产出文件**:
 - `pyproject.toml`
 - `src/bmadnotion/__init__.py`
 - `src/bmadnotion/cli.py`
 - `tests/conftest.py`
+- `tests/test_cli.py`
+- `README.md` (详细文档)
+- `LICENSE`
+- `.github/workflows/workflow.yml`
 
 ---
 
@@ -734,7 +738,7 @@ def test_sync_db_shows_stats(cli_runner, tmp_path, sample_bmad_project, mock_not
 
 | Phase | Task | 状态 | 完成日期 |
 |-------|------|------|----------|
-| 1 | 1.1 项目初始化 | `pending` | - |
+| 1 | 1.1 项目初始化 | `done` ✅ | 2026-01-29 |
 | 1 | 1.2 配置系统 | `pending` | - |
 | 1 | 1.3 数据模型 | `pending` | - |
 | 1 | 1.4 SQLite 存储层 | `pending` | - |
