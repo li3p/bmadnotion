@@ -42,6 +42,7 @@ class PageSyncEngine:
         dry_run: bool = False,
         project_page_id: str | None = None,
         on_progress: "Callable[[str, str, int, int], None] | None" = None,
+        filter_path: str | None = None,
     ) -> SyncResult:
         """Sync planning artifacts to Notion pages.
 
@@ -51,6 +52,7 @@ class PageSyncEngine:
             project_page_id: Notion page ID of the Project row (parent for documents).
                            If not provided, uses config.page_sync.parent_page_id.
             on_progress: Callback (doc_name, status, current, total) called after each doc.
+            filter_path: If provided, only sync the document with this filename.
 
         Returns:
             SyncResult with statistics about the sync operation.
@@ -69,6 +71,16 @@ class PageSyncEngine:
 
         # Scan documents
         documents = self.scanner.scan_documents()
+
+        # Filter to specific document if requested
+        if filter_path:
+            documents = [d for d in documents if d.path.name == filter_path]
+            if not documents:
+                return SyncResult(
+                    failed=1,
+                    errors=[f"Document not found: {filter_path}"],
+                )
+
         total = len(documents)
 
         created = 0

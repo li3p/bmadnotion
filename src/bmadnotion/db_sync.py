@@ -53,6 +53,7 @@ class DbSyncEngine:
         dry_run: bool = False,
         project_page_id: str | None = None,
         on_progress: "Callable[[str, str, str, int, int], None] | None" = None,
+        filter_key: str | None = None,
     ) -> DbSyncResult:
         """Sync sprint data to Notion databases.
 
@@ -61,6 +62,7 @@ class DbSyncEngine:
             dry_run: If True, report what would be done without making changes.
             project_page_id: Notion page ID of the Project row (for relation).
             on_progress: Callback (type, key, status, current, total) called after each item.
+            filter_key: If provided, only sync the epic or story with this key.
 
         Returns:
             DbSyncResult with statistics about the sync operation.
@@ -75,6 +77,19 @@ class DbSyncEngine:
         # Filter stories if require_story_file is enabled
         if self.config.database_sync.tasks.require_story_file:
             stories = [s for s in stories if s.file_path is not None]
+
+        # Filter to specific key if requested
+        if filter_key:
+            if filter_key.startswith("epic-"):
+                epics = [e for e in epics if e.key == filter_key]
+                stories = []  # Don't sync stories when filtering to a specific epic
+            else:
+                # Assume it's a story key
+                stories = [s for s in stories if s.key == filter_key]
+                # Still need parent epic for relation
+                if stories:
+                    epic_keys = {s.epic_key for s in stories}
+                    epics = [e for e in epics if e.key in epic_keys]
 
         total_epics = len(epics)
         total_stories = len(stories)

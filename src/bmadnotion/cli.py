@@ -612,13 +612,16 @@ def _sync_all(force: bool, dry_run: bool):
 
 
 @sync.command("pages")
+@click.argument("filename", required=False)
 @click.option("--force", "-f", is_flag=True, help="Force full sync, ignore cache")
 @click.option("--dry-run", is_flag=True, help="Preview changes without syncing")
-def sync_pages(force: bool, dry_run: bool):
+def sync_pages(filename: str | None, force: bool, dry_run: bool):
     """Sync planning artifacts to Notion Pages.
 
     Syncs documents like PRD, Architecture, and UX Design to Notion pages.
     Documents are created as sub-pages of the Project row if configured.
+
+    If FILENAME is provided, only sync that specific file (e.g., prd.md).
     """
     from bmadnotion.page_sync import PageSyncEngine
 
@@ -663,13 +666,15 @@ def sync_pages(force: bool, dry_run: bool):
         click.echo(f"  [{current}/{total}] {symbol} {doc_name} ({status})")
 
     # Perform sync
-    click.echo(f"{mode}Syncing pages...")
+    target = filename if filename else "all pages"
+    click.echo(f"{mode}Syncing {target}...")
     engine = PageSyncEngine(marknotion_client, store, config)
     result = engine.sync(
         force=force,
         dry_run=dry_run,
         project_page_id=project_page_id,
         on_progress=on_progress,
+        filter_path=filename,
     )
 
     # Display results
@@ -691,13 +696,16 @@ def sync_pages(force: bool, dry_run: bool):
 
 
 @sync.command("db")
+@click.argument("key", required=False)
 @click.option("--force", "-f", is_flag=True, help="Force full sync, ignore cache")
 @click.option("--dry-run", is_flag=True, help="Preview changes without syncing")
-def sync_db(force: bool, dry_run: bool):
+def sync_db(key: str | None, force: bool, dry_run: bool):
     """Sync sprint status to Notion Database.
 
     Syncs Epics and Stories from sprint-status.yaml to Notion databases.
     Stories are linked to both their Epic (Sprint) and the Project.
+
+    If KEY is provided, only sync that specific epic or story (e.g., epic-1, 1-1-xxx).
     """
     from bmadnotion.db_sync import DbSyncEngine
     from bmadnotion.scanner import SprintStatusNotFoundError
@@ -744,7 +752,8 @@ def sync_db(force: bool, dry_run: bool):
         click.echo(f"  [{current}/{total}] {symbol} {prefix}: {key} ({status})")
 
     # Perform sync
-    click.echo(f"{mode}Syncing database...")
+    target = key if key else "all"
+    click.echo(f"{mode}Syncing {target}...")
     engine = DbSyncEngine(marknotion_client, store, config)
 
     try:
@@ -753,6 +762,7 @@ def sync_db(force: bool, dry_run: bool):
             dry_run=dry_run,
             project_page_id=project_page_id,
             on_progress=on_progress,
+            filter_key=key,
         )
     except SprintStatusNotFoundError as e:
         click.echo(f"Error: {e}", err=True)

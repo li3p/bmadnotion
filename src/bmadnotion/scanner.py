@@ -151,9 +151,13 @@ class BMADScanner:
                 title = self._extract_title(content, f"Epic {epic_num}")
                 break
 
+        # Prepend epic key to title (e.g., "Epic-1 Title")
+        epic_prefix = key.replace("epic-", "Epic-")
+        full_title = f"{epic_prefix} {title}"
+
         return Epic(
             key=key,
-            title=title,
+            title=full_title,
             status=status,
             file_path=file_path,
             mtime=mtime,
