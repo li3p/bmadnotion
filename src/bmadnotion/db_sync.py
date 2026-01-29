@@ -14,6 +14,7 @@ class DbSyncEngine:
     """Engine for syncing sprint data to Notion databases.
 
     Syncs Epics to Sprints database and Stories to Tasks database.
+    Stories are linked to both their Epic (Sprint) and the Project.
     Uses status mapping from config and tracks sync state in SQLite.
     """
 
@@ -21,7 +22,7 @@ class DbSyncEngine:
         """Initialize the database sync engine.
 
         Args:
-            client: Notion client instance.
+            client: Notion client instance (marknotion.NotionClient).
             store: SQLite store for tracking sync state.
             config: Loaded configuration.
         """
@@ -30,12 +31,18 @@ class DbSyncEngine:
         self.config = config
         self.scanner = BMADScanner(config)
 
-    def sync(self, force: bool = False, dry_run: bool = False) -> DbSyncResult:
+    def sync(
+        self,
+        force: bool = False,
+        dry_run: bool = False,
+        project_page_id: str | None = None,
+    ) -> DbSyncResult:
         """Sync sprint data to Notion databases.
 
         Args:
             force: If True, sync all items regardless of changes.
             dry_run: If True, report what would be done without making changes.
+            project_page_id: Notion page ID of the Project row (for relation).
 
         Returns:
             DbSyncResult with statistics about the sync operation.
@@ -65,11 +72,17 @@ class DbSyncEngine:
                 result.epics_failed += 1
                 result.errors.append(f"Failed to sync epic {epic.key}: {e}")
 
-        # Then sync stories (with relations to epics)
+        # Then sync stories (with relations to epics and project)
         for story in stories:
             try:
                 epic_page_id = epic_id_map.get(story.epic_key)
-                action = self._sync_story(story, epic_page_id, force=force, dry_run=dry_run)
+                action = self._sync_story(
+                    story,
+                    epic_page_id=epic_page_id,
+                    project_page_id=project_page_id,
+                    force=force,
+                    dry_run=dry_run,
+                )
                 if action == "created":
                     result.stories_created += 1
                 elif action == "updated":
@@ -113,10 +126,14 @@ class DbSyncEngine:
         status_mapping = self.config.database_sync.sprints.status_mapping
         mapped_status = status_mapping.get(epic.status, epic.status)
 
+        # Get key property name
+        key_property = self.config.database_sync.sprints.key_property
+
         # Build properties
         properties = {
             "Name": {"title": [{"text": {"content": epic.title}}]},
             "Status": {"status": {"name": mapped_status}},
+            key_property: {"rich_text": [{"text": {"content": epic.key}}]},
         }
 
         if dry_run:
@@ -164,13 +181,19 @@ class DbSyncEngine:
             return ("updated", page_id)
 
     def _sync_story(
-        self, story: Story, epic_page_id: str | None, force: bool, dry_run: bool
+        self,
+        story: Story,
+        epic_page_id: str | None,
+        project_page_id: str | None,
+        force: bool,
+        dry_run: bool,
     ) -> str:
         """Sync a single story.
 
         Args:
             story: Story to sync.
-            epic_page_id: Notion page ID of the parent epic (for relation).
+            epic_page_id: Notion page ID of the parent epic (for Sprint relation).
+            project_page_id: Notion page ID of the project (for Project relation).
             force: Force sync regardless of changes.
             dry_run: Don't make actual changes.
 
@@ -201,15 +224,23 @@ class DbSyncEngine:
         status_mapping = self.config.database_sync.tasks.status_mapping
         mapped_status = status_mapping.get(story.status, story.status)
 
+        # Get key property name
+        key_property = self.config.database_sync.tasks.key_property
+
         # Build properties
         properties = {
             "Name": {"title": [{"text": {"content": story.title}}]},
             "Status": {"status": {"name": mapped_status}},
+            key_property: {"rich_text": [{"text": {"content": story.key}}]},
         }
 
         # Add Sprint relation if epic_page_id is available
         if epic_page_id:
             properties["Sprint"] = {"relation": [{"id": epic_page_id}]}
+
+        # Add Project relation if project_page_id is available
+        if project_page_id:
+            properties["Project"] = {"relation": [{"id": project_page_id}]}
 
         if dry_run:
             return "created" if state is None else "updated"

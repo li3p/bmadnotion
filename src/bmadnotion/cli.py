@@ -4,6 +4,7 @@ from pathlib import Path
 
 import click
 from dotenv import load_dotenv
+from notion_client import Client
 
 from bmadnotion import __version__
 from bmadnotion.config import ConfigNotFoundError, TokenNotFoundError, load_config
@@ -73,7 +74,8 @@ notion:
 # Page Sync: Sync planning artifacts to Notion Pages
 page_sync:
   enabled: true
-  # Parent page ID where documents will be created
+  # Parent page ID (fallback if Projects database not configured)
+  # When Projects database is configured, documents become sub-pages of the Project row
   parent_page_id: "your-parent-page-id"
   documents:
     - path: "prd.md"
@@ -86,22 +88,31 @@ page_sync:
 # Database Sync: Sync sprint status to Notion Databases
 database_sync:
   enabled: true
+  # Projects database (from Agile template)
+  projects:
+    database_id: "your-projects-database-id"
+    key_property: "BMADProject"
+    name_property: "Project name"
+  # Sprints database (for Epics)
   sprints:
-    # Notion database ID for Epics/Sprints
     database_id: "your-sprints-database-id"
+    key_property: "BMADEpic"
     status_mapping:
       backlog: "Not Started"
       in-progress: "In Progress"
       done: "Done"
+  # Tasks database (for Stories)
   tasks:
-    # Notion database ID for Stories/Tasks
     database_id: "your-tasks-database-id"
+    key_property: "BMADStory"
     status_mapping:
       backlog: "Backlog"
       ready-for-dev: "Ready"
       in-progress: "In Progress"
       review: "Review"
       done: "Done"
+
+# Run 'bmad setup-db' after configuring database IDs to add required fields
 '''
 
     config_path.write_text(config_content)
@@ -110,7 +121,42 @@ database_sync:
     click.echo("Next steps:")
     click.echo("  1. Set your NOTION_TOKEN environment variable")
     click.echo("  2. Update the page/database IDs in .bmadnotion.yaml")
-    click.echo("  3. Run 'bmadnotion sync' to sync your project")
+    click.echo("  3. Run 'bmad setup-db' to add sync key fields")
+    click.echo("  4. Run 'bmad sync' to sync your project")
+
+
+def _get_or_create_project(
+    notion_client: Client,
+    store: Store,
+    config,
+    dry_run: bool = False,
+) -> str | None:
+    """Get or create the Project row and return its page ID.
+
+    Args:
+        notion_client: Official notion-client instance (for database operations).
+        store: SQLite store for tracking sync state.
+        config: Loaded configuration.
+        dry_run: If True, don't create anything.
+
+    Returns:
+        Notion page ID of the Project row, or None if Projects database not configured.
+    """
+    from bmadnotion.project_sync import ProjectSyncEngine
+
+    db_config = config.database_sync.projects
+    if not db_config.database_id:
+        return None
+
+    engine = ProjectSyncEngine(notion_client, store, config)
+    page_id, was_created = engine.get_or_create_project(dry_run=dry_run)
+
+    if was_created and not dry_run:
+        click.echo(f"Created Project row: {config.project}")
+    elif was_created:
+        click.echo(f"[DRY RUN] Would create Project row: {config.project}")
+
+    return page_id
 
 
 @cli.group(invoke_without_command=True)
@@ -128,8 +174,120 @@ def sync(ctx, force: bool, dry_run: bool):
 
     if ctx.invoked_subcommand is None:
         # No subcommand given, sync all
-        ctx.invoke(sync_pages, force=force, dry_run=dry_run)
-        ctx.invoke(sync_db, force=force, dry_run=dry_run)
+        _sync_all(force=force, dry_run=dry_run)
+
+
+def _sync_all(force: bool, dry_run: bool):
+    """Sync all artifacts (pages and database) with shared Project context."""
+    from bmadnotion.db_sync import DbSyncEngine
+    from bmadnotion.page_sync import PageSyncEngine
+    from bmadnotion.scanner import SprintStatusNotFoundError
+
+    project_root = get_project_root()
+
+    # Load configuration
+    try:
+        config = load_config(project_root)
+    except ConfigNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    # Get Notion token
+    try:
+        token = config.get_notion_token()
+    except TokenNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    # Create clients
+    if NotionClient is None:
+        click.echo("Error: marknotion is not installed.", err=True)
+        raise SystemExit(1)
+
+    marknotion_client = NotionClient(token=token)
+    notion_client = Client(auth=token)
+    store = Store(project_root)
+
+    mode = "[DRY RUN] " if dry_run else ""
+
+    # Get or create Project row first
+    project_page_id = None
+    if config.database_sync.enabled and config.database_sync.projects.database_id:
+        click.echo(f"{mode}Ensuring Project row exists...")
+        project_page_id = _get_or_create_project(notion_client, store, config, dry_run)
+
+    # Sync pages
+    if config.page_sync.enabled:
+        click.echo(f"{mode}Syncing pages...")
+        page_engine = PageSyncEngine(marknotion_client, store, config)
+        page_result = page_engine.sync(
+            force=force,
+            dry_run=dry_run,
+            project_page_id=project_page_id,
+        )
+
+        if dry_run:
+            click.echo(f"  Would create: {page_result.created}")
+            click.echo(f"  Would update: {page_result.updated}")
+            click.echo(f"  Would skip: {page_result.skipped}")
+        else:
+            click.echo(f"  Created: {page_result.created}")
+            click.echo(f"  Updated: {page_result.updated}")
+            click.echo(f"  Skipped: {page_result.skipped}")
+
+        if page_result.failed > 0:
+            click.echo(f"  Failed: {page_result.failed}", err=True)
+            for error in page_result.errors:
+                click.echo(f"    - {error}", err=True)
+
+    # Sync database
+    if config.database_sync.enabled:
+        click.echo(f"{mode}Syncing database...")
+        db_engine = DbSyncEngine(marknotion_client, store, config)
+
+        try:
+            db_result = db_engine.sync(
+                force=force,
+                dry_run=dry_run,
+                project_page_id=project_page_id,
+            )
+
+            click.echo("")
+            click.echo("Epics (Sprints):")
+            if dry_run:
+                click.echo(f"  Would create: {db_result.epics_created}")
+                click.echo(f"  Would update: {db_result.epics_updated}")
+                click.echo(f"  Would skip: {db_result.epics_skipped}")
+            else:
+                click.echo(f"  Created: {db_result.epics_created}")
+                click.echo(f"  Updated: {db_result.epics_updated}")
+                click.echo(f"  Skipped: {db_result.epics_skipped}")
+
+            click.echo("")
+            click.echo("Stories (Tasks):")
+            if dry_run:
+                click.echo(f"  Would create: {db_result.stories_created}")
+                click.echo(f"  Would update: {db_result.stories_updated}")
+                click.echo(f"  Would skip: {db_result.stories_skipped}")
+            else:
+                click.echo(f"  Created: {db_result.stories_created}")
+                click.echo(f"  Updated: {db_result.stories_updated}")
+                click.echo(f"  Skipped: {db_result.stories_skipped}")
+
+            if db_result.epics_failed > 0 or db_result.stories_failed > 0:
+                click.echo("")
+                click.echo(
+                    f"Failed: {db_result.epics_failed + db_result.stories_failed}",
+                    err=True,
+                )
+                for error in db_result.errors:
+                    click.echo(f"  - {error}", err=True)
+
+        except SprintStatusNotFoundError as e:
+            click.echo(f"  Warning: {e}")
+
+    click.echo("")
+    click.echo("Done.")
 
 
 @sync.command("pages")
@@ -139,6 +297,7 @@ def sync_pages(force: bool, dry_run: bool):
     """Sync planning artifacts to Notion Pages.
 
     Syncs documents like PRD, Architecture, and UX Design to Notion pages.
+    Documents are created as sub-pages of the Project row if configured.
     """
     from bmadnotion.page_sync import PageSyncEngine
 
@@ -163,20 +322,28 @@ def sync_pages(force: bool, dry_run: bool):
         click.echo(f"Error: {e}", err=True)
         raise SystemExit(1)
 
-    # Create Notion client
+    # Create clients
     if NotionClient is None:
         click.echo("Error: marknotion is not installed.", err=True)
         raise SystemExit(1)
 
-    client = NotionClient(token=token)
+    marknotion_client = NotionClient(token=token)
+    notion_client = Client(auth=token)
     store = Store(project_root)
-    engine = PageSyncEngine(client, store, config)
+
+    mode = "[DRY RUN] " if dry_run else ""
+
+    # Get or create Project row
+    project_page_id = _get_or_create_project(notion_client, store, config, dry_run)
 
     # Perform sync
-    mode = "[DRY RUN] " if dry_run else ""
     click.echo(f"{mode}Syncing pages...")
-
-    result = engine.sync(force=force, dry_run=dry_run)
+    engine = PageSyncEngine(marknotion_client, store, config)
+    result = engine.sync(
+        force=force,
+        dry_run=dry_run,
+        project_page_id=project_page_id,
+    )
 
     # Display results
     if dry_run:
@@ -203,6 +370,7 @@ def sync_db(force: bool, dry_run: bool):
     """Sync sprint status to Notion Database.
 
     Syncs Epics and Stories from sprint-status.yaml to Notion databases.
+    Stories are linked to both their Epic (Sprint) and the Project.
     """
     from bmadnotion.db_sync import DbSyncEngine
     from bmadnotion.scanner import SprintStatusNotFoundError
@@ -228,21 +396,30 @@ def sync_db(force: bool, dry_run: bool):
         click.echo(f"Error: {e}", err=True)
         raise SystemExit(1)
 
-    # Create Notion client
+    # Create clients
     if NotionClient is None:
         click.echo("Error: marknotion is not installed.", err=True)
         raise SystemExit(1)
 
-    client = NotionClient(token=token)
+    marknotion_client = NotionClient(token=token)
+    notion_client = Client(auth=token)
     store = Store(project_root)
-    engine = DbSyncEngine(client, store, config)
+
+    mode = "[DRY RUN] " if dry_run else ""
+
+    # Get or create Project row
+    project_page_id = _get_or_create_project(notion_client, store, config, dry_run)
 
     # Perform sync
-    mode = "[DRY RUN] " if dry_run else ""
     click.echo(f"{mode}Syncing database...")
+    engine = DbSyncEngine(marknotion_client, store, config)
 
     try:
-        result = engine.sync(force=force, dry_run=dry_run)
+        result = engine.sync(
+            force=force,
+            dry_run=dry_run,
+            project_page_id=project_page_id,
+        )
     except SprintStatusNotFoundError as e:
         click.echo(f"Error: {e}", err=True)
         raise SystemExit(1)
@@ -325,7 +502,7 @@ def status():
                 synced += 1
 
         if synced > 0 and pending == 0 and changed == 0:
-            click.echo(f"  ✓ All {synced} documents synced")
+            click.echo(f"  All {synced} documents synced")
         else:
             click.echo(f"\n  Synced: {synced}, Pending: {pending}, Changed: {changed}")
         click.echo("")
@@ -384,7 +561,7 @@ def status():
                 and stories_changed == 0
             )
             if all_synced:
-                click.echo("\n  ✓ All items up to date")
+                click.echo("\n  All items up to date")
 
         except SprintStatusNotFoundError:
             click.echo("  No sprint-status.yaml found")
@@ -434,8 +611,59 @@ def config_show():
     click.echo("Database Sync:")
     click.echo(f"  Enabled: {config.database_sync.enabled}")
     if config.database_sync.enabled:
+        click.echo(f"  Projects DB: {config.database_sync.projects.database_id}")
         click.echo(f"  Sprints DB: {config.database_sync.sprints.database_id}")
         click.echo(f"  Tasks DB: {config.database_sync.tasks.database_id}")
+
+
+@cli.command("setup-db")
+def setup_db():
+    """Set up required fields in Notion databases.
+
+    Adds sync key fields (BMADProject, BMADEpic, BMADStory) to the configured
+    databases if they don't already exist.
+    """
+    from bmadnotion.schema import setup_all_databases
+
+    project_root = get_project_root()
+
+    # Load configuration
+    try:
+        config = load_config(project_root)
+    except ConfigNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    # Check if database sync is enabled
+    if not config.database_sync.enabled:
+        click.echo("Database sync is disabled in configuration.")
+        return
+
+    # Get Notion token
+    try:
+        token = config.get_notion_token()
+    except TokenNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
+
+    click.echo("Setting up database fields...")
+
+    # Create Notion client
+    client = Client(auth=token)
+
+    try:
+        results = setup_all_databases(client, config)
+
+        if not results:
+            click.echo("All required fields already exist.")
+        else:
+            for db_type, fields in results.items():
+                click.echo(f"  Added to {db_type}: {', '.join(fields)}")
+
+        click.echo("Done.")
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

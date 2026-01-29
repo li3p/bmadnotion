@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, computed_field
 # Type aliases for status values
 EpicStatus = Literal["backlog", "in-progress", "done"]
 StoryStatus = Literal["backlog", "ready-for-dev", "in-progress", "review", "done"]
-EntityType = Literal["epic", "story"]
+EntityType = Literal["project", "epic", "story"]
 
 
 class Document(BaseModel):
@@ -117,16 +117,16 @@ class PageSyncState(BaseModel):
 
 
 class DbSyncState(BaseModel):
-    """Tracks the sync state of a database entry (epic or story).
+    """Tracks the sync state of a database entry (project, epic, or story).
 
     Stored in SQLite to track what has been synced to Notion.
     """
 
     local_key: str
-    """Local key (e.g., 'epic-1' or '1-5-create-kp')."""
+    """Local key (e.g., 'project:myproject', 'epic-1', or '1-5-create-kp')."""
 
     entity_type: EntityType
-    """Type of entity: 'epic' or 'story'."""
+    """Type of entity: 'project', 'epic', or 'story'."""
 
     notion_page_id: str
     """Notion page ID in the database."""

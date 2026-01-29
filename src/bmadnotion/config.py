@@ -50,6 +50,7 @@ class SprintsDbConfig(BaseModel):
     """Sprints database configuration."""
 
     database_id: str | None = None
+    key_property: str = "BMADEpic"
     status_mapping: dict[str, str] = Field(default_factory=lambda: {
         "backlog": "Not Started",
         "in-progress": "In Progress",
@@ -61,6 +62,7 @@ class TasksDbConfig(BaseModel):
     """Tasks database configuration."""
 
     database_id: str | None = None
+    key_property: str = "BMADStory"
     status_mapping: dict[str, str] = Field(default_factory=lambda: {
         "backlog": "Backlog",
         "ready-for-dev": "Ready",
@@ -68,6 +70,14 @@ class TasksDbConfig(BaseModel):
         "review": "Review",
         "done": "Done",
     })
+
+
+class ProjectsDbConfig(BaseModel):
+    """Projects database configuration."""
+
+    database_id: str | None = None
+    key_property: str = "BMADProject"
+    name_property: str = "Project name"
 
 
 class PageSyncConfig(BaseModel):
@@ -82,6 +92,7 @@ class DatabaseSyncConfig(BaseModel):
     """Database sync configuration."""
 
     enabled: bool = True
+    projects: ProjectsDbConfig = Field(default_factory=ProjectsDbConfig)
     sprints: SprintsDbConfig = Field(default_factory=SprintsDbConfig)
     tasks: TasksDbConfig = Field(default_factory=TasksDbConfig)
 

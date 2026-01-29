@@ -8,8 +8,10 @@ Sync [BMAD](https://docs.bmad-method.org/) project artifacts to Notion. Keep you
 
 ## Features
 
-- **Page Sync**: Sync planning artifacts (PRD, Architecture, UX Design) to Notion Pages
-- **Database Sync**: Sync sprint status (Epics, Stories) to Notion Databases
+- **Projects Integration**: Automatically create Project rows in the Projects database
+- **Page Sync**: Sync planning artifacts (PRD, Architecture, UX Design) as sub-pages under Project
+- **Database Sync**: Sync sprint status (Epics → Sprints, Stories → Tasks)
+- **Relation Linking**: Stories link to both their Sprint (Epic) and Project
 - **Incremental Sync**: Only sync changed files based on content hash
 - **BMAD Native**: Understands BMAD project structure and conventions
 
@@ -41,7 +43,7 @@ pip install bmadnotion
 
 ```bash
 cd your-bmad-project
-bmadnotion init
+bmad init
 ```
 
 This creates `.bmadnotion.yaml` configuration file.
@@ -58,52 +60,112 @@ echo "NOTION_TOKEN=your_notion_integration_token" >> .env
 export NOTION_TOKEN=your_notion_integration_token
 ```
 
-Edit `.bmadnotion.yaml` to set your Notion workspace page ID:
+Edit `.bmadnotion.yaml` to set your database IDs:
 
 ```yaml
 project: my-project
 notion:
   token_env: NOTION_TOKEN
   workspace_page_id: "your-workspace-page-id"
+
+database_sync:
+  enabled: true
+  projects:
+    database_id: "your-projects-database-id"
+  sprints:
+    database_id: "your-sprints-database-id"
+  tasks:
+    database_id: "your-tasks-database-id"
 ```
 
-### 3. Sync
+### 3. Set Up Database Fields
+
+```bash
+bmad setup-db
+```
+
+This adds required sync key fields (BMADProject, BMADEpic, BMADStory) to your databases.
+
+### 4. Sync
 
 ```bash
 # Sync everything
-bmadnotion sync
+bmad sync
 
 # Sync only planning documents (Pages)
-bmadnotion sync pages
+bmad sync pages
 
 # Sync only sprint tracking (Database)
-bmadnotion sync db
+bmad sync db
 
 # Preview changes without syncing
-bmadnotion sync --dry-run
+bmad sync --dry-run
 
 # Force full sync (ignore cache)
-bmadnotion sync --force
+bmad sync --force
 ```
 
-### 4. Check Status
+### 5. Check Status
 
 ```bash
-bmadnotion status
+bmad status
 ```
+
+## How It Works
+
+### Sync Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Notion Workspace                        │
+├─────────────────────────────────────────────────────────────┤
+│  Projects Database                                          │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ Project: "my-project" (BMADProject: "my-project")   │   │
+│  │   └── Sub-pages:                                     │   │
+│  │         ├── PRD - my-project                         │   │
+│  │         ├── Architecture - my-project                │   │
+│  │         └── UX Design - my-project                   │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+│  Sprints Database                                           │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ Epic 1: "User Management" (BMADEpic: "epic-1")      │   │
+│  │ Epic 2: "Payment System" (BMADEpic: "epic-2")       │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+│  Tasks Database                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ Story: "Create login page" (BMADStory: "1-1-login") │   │
+│  │   ├── Sprint: Epic 1 (Relation)                     │   │
+│  │   ├── Project: my-project (Relation)                │   │
+│  │   └── Content: [Story markdown as blocks]           │   │
+│  └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### What Gets Synced
+
+| Local | Notion | Details |
+|-------|--------|---------|
+| Project name | Projects database row | Auto-created, serves as parent for documents |
+| `prd.md` | Sub-page under Project | Planning artifact |
+| `architecture.md` | Sub-page under Project | Planning artifact |
+| `epic-N` in sprint-status.yaml | Sprints database row | With BMADEpic key |
+| `N-M-story` in sprint-status.yaml | Tasks database row | With BMADStory key, relations to Sprint & Project |
 
 ## Configuration
 
 ### `.bmadnotion.yaml` Reference
 
 ```yaml
-# Project name
+# Project name (used as Project row title)
 project: bloomy
 
 # Notion configuration
 notion:
   token_env: NOTION_TOKEN           # Environment variable name for token
-  workspace_page_id: "abc123..."    # Root page for synced content
+  workspace_page_id: "abc123..."    # Root page for reference
 
 # BMAD paths (auto-detected from _bmad/bmm/config.yaml if not specified)
 paths:
@@ -116,7 +178,8 @@ paths:
 # Page sync configuration
 page_sync:
   enabled: true
-  parent_page_id: "..."             # Parent page for documents
+  # Fallback parent page (used if Projects database not configured)
+  parent_page_id: "..."
   documents:
     - path: "prd.md"
       title: "PRD - {project}"
@@ -124,22 +187,30 @@ page_sync:
       title: "Architecture - {project}"
     - path: "ux-design-specification.md"
       title: "UX Design - {project}"
-    - path: "product-brief.md"
-      title: "Product Brief - {project}"
 
 # Database sync configuration
 database_sync:
   enabled: true
 
+  # Projects database (for Project row and document sub-pages)
+  projects:
+    database_id: "..."              # Notion database ID for Projects
+    key_property: "BMADProject"     # Field to store BMAD project key
+    name_property: "Project name"   # Title field name
+
+  # Sprints database (for Epics)
   sprints:
     database_id: "..."              # Notion database ID for Sprints
+    key_property: "BMADEpic"        # Field to store BMAD epic key
     status_mapping:
       backlog: "Not Started"
       in-progress: "In Progress"
       done: "Done"
 
+  # Tasks database (for Stories)
   tasks:
     database_id: "..."              # Notion database ID for Tasks
+    key_property: "BMADStory"       # Field to store BMAD story key
     status_mapping:
       backlog: "Backlog"
       ready-for-dev: "Ready"
@@ -158,7 +229,7 @@ your-project/
 │   └── bmm/
 │       └── config.yaml           # BMAD configuration
 ├── _bmad-output/
-│   ├── planning-artifacts/       # → Notion Pages
+│   ├── planning-artifacts/       # → Notion Pages (sub-pages of Project)
 │   │   ├── prd.md
 │   │   ├── architecture.md
 │   │   ├── ux-design-specification.md
@@ -169,58 +240,52 @@ your-project/
 │       ├── sprint-status.yaml    # Sprint tracking
 │       ├── 1-1-story-name.md     # Story files
 │       └── 1-2-another-story.md
-└── .bmadnotion.yaml              # bmadnotion config
+├── .bmadnotion.yaml              # bmadnotion config
+└── .env                          # NOTION_TOKEN (optional)
 ```
-
-## Sync Behavior
-
-### Page Sync (Planning Artifacts)
-
-| Local File | Notion |
-|------------|--------|
-| `prd.md` | Page: "PRD - {project}" |
-| `architecture.md` | Page: "Architecture - {project}" |
-| `ux-design-specification.md` | Page: "UX Design - {project}" |
-
-- Creates new pages if not exist
-- Updates existing pages if content changed (based on MD5 hash)
-- Preserves Notion page IDs across syncs
-
-### Database Sync (Sprint Tracking)
-
-| Local | Notion |
-|-------|--------|
-| `epic-N` in sprint-status.yaml | Row in Sprints database |
-| `N-M-story-name` in sprint-status.yaml | Row in Tasks database |
-| Story file content | Page content in Task row |
-
-- Syncs Epic/Story status
-- Creates Relation between Task and Sprint
-- Story file content becomes page blocks
 
 ## CLI Reference
 
 ```bash
 # Initialize project
-bmadnotion init [--project NAME]
+bmad init [--project NAME] [--force]
+
+# Set up database fields (adds BMADProject, BMADEpic, BMADStory)
+bmad setup-db
 
 # Sync all
-bmadnotion sync [--force] [--dry-run]
+bmad sync [--force] [--dry-run]
 
-# Sync pages only
-bmadnotion sync pages [--force] [--dry-run]
+# Sync pages only (planning artifacts)
+bmad sync pages [--force] [--dry-run]
 
-# Sync database only
-bmadnotion sync db [--force] [--dry-run]
+# Sync database only (epics and stories)
+bmad sync db [--force] [--dry-run]
 
 # Show sync status
-bmadnotion status
+bmad status
 
 # Show configuration
-bmadnotion config show
+bmad config show
 ```
 
+> Note: `bmadnotion` command also works (alias for `bmad`).
+
 ## Notion Setup
+
+### 0. Set Up Notion Workspace (Recommended)
+
+For the best experience with bmadnotion's database sync, we recommend using the official Agile Project Management template:
+
+1. Go to [Agile Project Management Template](https://www.notion.com/templates/agile-project-management-notion)
+2. Click "Get template" to add it to your workspace
+3. This template includes:
+   - **Projects** database (for BMAD projects and their documents)
+   - **Sprints** database (for Epics)
+   - **Tasks** database (for Stories)
+   - Pre-configured views and relations
+
+You can also create your own databases, but ensure they have the required properties (Status, Title, Relations).
 
 ### 1. Create a Notion Integration
 
@@ -230,18 +295,25 @@ bmadnotion config show
 4. Select the workspace
 5. Copy the "Internal Integration Token"
 
-### 2. Share Pages/Databases with Integration
+### 2. Share Databases with Integration
 
-1. Open the parent page where documents will be synced
+For each database (Projects, Sprints, Tasks):
+1. Open the database
 2. Click "..." menu → "Add connections"
 3. Select your integration
-4. Repeat for any databases you want to sync to
 
-### 3. Get Page/Database IDs
+### 3. Get Database IDs
 
-Page and database IDs are in the URL:
-- `https://notion.so/Your-Page-**abc123def456**` → ID is `abc123def456`
+Database IDs are in the URL:
 - `https://notion.so/**abc123def456**?v=...` → ID is `abc123def456`
+
+### 4. Run Setup
+
+```bash
+bmad setup-db
+```
+
+This adds the required sync key fields if they don't exist.
 
 ## Troubleshooting
 
@@ -257,24 +329,23 @@ export NOTION_TOKEN=your_token_here
 echo $NOTION_TOKEN
 ```
 
-### "Page not found" error
-- Ensure the integration has access to the page
-- Check that the page ID is correct
-
-### "Database not found" error
+### "Page not found" / "Database not found" error
 - Ensure the integration has access to the database
+- Go to the database → "..." → "Add connections" → Select your integration
 - Verify database ID in configuration
 
 ### Sync not detecting changes
 - bmadnotion uses content hash to detect changes
 - Use `--force` to sync everything regardless of cache
 
+### "Property not found" error
+- Run `bmad setup-db` to add required fields to databases
+
 ## Requirements
 
 - Python 3.13+
 - Notion Integration Token with appropriate permissions:
-  - Read/Write access to pages
-  - Read/Write access to databases
+  - Read/Write access to databases (Projects, Sprints, Tasks)
 
 ## Related Projects
 

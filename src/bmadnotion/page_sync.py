@@ -14,6 +14,7 @@ class PageSyncEngine:
     """Engine for syncing planning artifacts to Notion pages.
 
     Syncs documents like PRD, Architecture, UX Design to Notion pages.
+    Documents are created as sub-pages under the Project row in the Projects database.
     Uses content hash to detect changes and avoid unnecessary syncs.
     """
 
@@ -21,7 +22,7 @@ class PageSyncEngine:
         """Initialize the page sync engine.
 
         Args:
-            client: Notion client instance.
+            client: Notion client instance (marknotion.NotionClient).
             store: SQLite store for tracking sync state.
             config: Loaded configuration.
         """
@@ -30,12 +31,19 @@ class PageSyncEngine:
         self.config = config
         self.scanner = BMADScanner(config)
 
-    def sync(self, force: bool = False, dry_run: bool = False) -> SyncResult:
+    def sync(
+        self,
+        force: bool = False,
+        dry_run: bool = False,
+        project_page_id: str | None = None,
+    ) -> SyncResult:
         """Sync planning artifacts to Notion pages.
 
         Args:
             force: If True, sync all documents regardless of changes.
             dry_run: If True, report what would be done without making changes.
+            project_page_id: Notion page ID of the Project row (parent for documents).
+                           If not provided, uses config.page_sync.parent_page_id.
 
         Returns:
             SyncResult with statistics about the sync operation.
@@ -43,6 +51,14 @@ class PageSyncEngine:
         # Check if page sync is enabled
         if not self.config.page_sync.enabled:
             return SyncResult()
+
+        # Determine parent page ID
+        parent_page_id = project_page_id or self.config.page_sync.parent_page_id
+        if not parent_page_id:
+            return SyncResult(
+                failed=1,
+                errors=["No parent page ID. Set project_page_id or page_sync.parent_page_id."],
+            )
 
         # Scan documents
         documents = self.scanner.scan_documents()
@@ -55,7 +71,12 @@ class PageSyncEngine:
 
         for doc in documents:
             try:
-                result = self._sync_document(doc, force=force, dry_run=dry_run)
+                result = self._sync_document(
+                    doc,
+                    parent_page_id=parent_page_id,
+                    force=force,
+                    dry_run=dry_run,
+                )
                 if result == "created":
                     created += 1
                 elif result == "updated":
@@ -75,12 +96,17 @@ class PageSyncEngine:
         )
 
     def _sync_document(
-        self, doc: Document, force: bool, dry_run: bool
+        self,
+        doc: Document,
+        parent_page_id: str,
+        force: bool,
+        dry_run: bool,
     ) -> str:
         """Sync a single document.
 
         Args:
             doc: Document to sync.
+            parent_page_id: Notion page ID of the parent (Project row).
             force: Force sync regardless of changes.
             dry_run: Don't make actual changes.
 
@@ -107,15 +133,17 @@ class PageSyncEngine:
             return "created" if state is None else "updated"
 
         if state is None:
-            # Create new page
-            page = self.client.create_page(
-                parent_id=self.config.page_sync.parent_page_id,
+            # Create new page as child of Project
+            page = self.client.create_child_page(
+                parent_page_id=parent_page_id,
                 title=doc.title,
+                children=blocks[:100] if blocks else None,
             )
             page_id = page["id"]
 
-            # Add content blocks
-            self.client.append_blocks(page_id, blocks)
+            # Add remaining blocks if any
+            if len(blocks) > 100:
+                self.client.append_blocks_in_batches(page_id, blocks[100:])
 
             # Save state
             self.store.save_page_state(PageSyncState(
@@ -132,7 +160,8 @@ class PageSyncEngine:
 
             # Clear existing content and add new blocks
             self.client.clear_page_content(page_id)
-            self.client.append_blocks(page_id, blocks)
+            if blocks:
+                self.client.append_blocks_in_batches(page_id, blocks)
 
             # Update state
             self.store.save_page_state(PageSyncState(

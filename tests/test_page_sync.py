@@ -37,11 +37,11 @@ page_sync:
 
 @pytest.fixture
 def mock_notion_client():
-    """Create a mock Notion client."""
+    """Create a mock Notion client (marknotion.NotionClient)."""
     client = MagicMock()
-    client.create_page.return_value = {"id": "new-page-id-123"}
-    client.update_page.return_value = {"id": "existing-page-id"}
+    client.create_child_page.return_value = {"id": "new-page-id-123"}
     client.append_blocks.return_value = None
+    client.append_blocks_in_batches.return_value = None
     client.clear_page_content.return_value = None
     return client
 
@@ -64,7 +64,7 @@ class TestPageSyncEngine:
         result = engine.sync()
 
         assert result.created == 2
-        assert mock_notion_client.create_page.call_count == 2
+        assert mock_notion_client.create_child_page.call_count == 2
 
         # Verify state was saved
         state = store.get_page_state("prd.md")
@@ -123,7 +123,7 @@ class TestPageSyncEngine:
         assert result.skipped == 2
         assert result.created == 0
         assert result.updated == 0
-        assert mock_notion_client.create_page.call_count == 0
+        assert mock_notion_client.create_child_page.call_count == 0
 
     def test_sync_force_mode(self, sample_bmad_project: Path, mock_notion_client, monkeypatch):
         """Should sync all documents when force=True."""
@@ -188,10 +188,29 @@ class TestPageSyncEngine:
         assert result.created == 2
 
         # But no actual API calls
-        assert mock_notion_client.create_page.call_count == 0
+        assert mock_notion_client.create_child_page.call_count == 0
 
         # And no store updates
         assert store.get_page_state("prd.md") is None
+
+    def test_sync_with_project_page_id(self, sample_bmad_project: Path, mock_notion_client, monkeypatch):
+        """Should use project_page_id as parent when provided."""
+        from bmadnotion.config import load_config
+        from bmadnotion.store import Store
+        from bmadnotion.page_sync import PageSyncEngine
+
+        monkeypatch.setenv("NOTION_TOKEN", "test-token")
+
+        config = load_config(sample_bmad_project)
+        store = Store(sample_bmad_project)
+        engine = PageSyncEngine(mock_notion_client, store, config)
+
+        result = engine.sync(project_page_id="project-row-123")
+
+        assert result.created == 2
+        # Verify create_child_page was called with project_page_id as parent
+        call_args = mock_notion_client.create_child_page.call_args_list[0]
+        assert call_args.kwargs["parent_page_id"] == "project-row-123"
 
 
 class TestPageSyncWithMarknotion:
@@ -211,12 +230,13 @@ class TestPageSyncWithMarknotion:
 
         engine.sync()
 
-        # Verify append_blocks was called with blocks
-        assert mock_notion_client.append_blocks.call_count >= 1
-        call_args = mock_notion_client.append_blocks.call_args_list[0]
-        blocks = call_args[0][1]  # Second positional argument
-        assert isinstance(blocks, list)
-        assert len(blocks) > 0
+        # Verify create_child_page was called with children blocks
+        assert mock_notion_client.create_child_page.call_count >= 1
+        call_args = mock_notion_client.create_child_page.call_args_list[0]
+        children = call_args.kwargs.get("children")
+        assert children is not None
+        assert isinstance(children, list)
+        assert len(children) > 0
 
 
 class TestPageSyncDisabled:
@@ -247,4 +267,4 @@ page_sync:
         result = engine.sync()
 
         assert result.total == 0
-        assert mock_notion_client.create_page.call_count == 0
+        assert mock_notion_client.create_child_page.call_count == 0
