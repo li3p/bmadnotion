@@ -28,3 +28,4 @@ coverage.xml
 
 # UV
 uv.lock
+.bmadnotion.yaml
