@@ -1,0 +1,1 @@
+"""bmadnotion tests."""
