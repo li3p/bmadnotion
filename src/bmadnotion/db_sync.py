@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from marknotion import markdown_to_blocks
 
 from bmadnotion.config import Config
 from bmadnotion.models import DbSyncResult, DbSyncState, Epic, Story
 from bmadnotion.scanner import BMADScanner
 from bmadnotion.store import Store
+
+if TYPE_CHECKING:
+    from notion_client import Client as OfficialClient
+    from marknotion import NotionClient as MarknotionClient
 
 
 class DbSyncEngine:
@@ -18,15 +24,23 @@ class DbSyncEngine:
     Uses status mapping from config and tracks sync state in SQLite.
     """
 
-    def __init__(self, client, store: Store, config: Config):
+    def __init__(
+        self,
+        client: "MarknotionClient",
+        store: Store,
+        config: Config,
+        notion_client: "OfficialClient | None" = None,
+    ):
         """Initialize the database sync engine.
 
         Args:
-            client: Notion client instance (marknotion.NotionClient).
+            client: Marknotion client (for block operations).
             store: SQLite store for tracking sync state.
             config: Loaded configuration.
+            notion_client: Official notion-client (for database operations).
         """
         self.client = client
+        self.notion_client = notion_client
         self.store = store
         self.config = config
         self.scanner = BMADScanner(config)
@@ -122,19 +136,22 @@ class DbSyncEngine:
         if not needs_sync and state:
             return ("skipped", state.notion_page_id)
 
-        # Map status
-        status_mapping = self.config.database_sync.sprints.status_mapping
-        mapped_status = status_mapping.get(epic.status, epic.status)
-
-        # Get key property name
-        key_property = self.config.database_sync.sprints.key_property
+        # Get property names from config
+        sprints_config = self.config.database_sync.sprints
+        name_property = sprints_config.name_property
+        status_property = sprints_config.status_property
+        key_property = sprints_config.key_property
 
         # Build properties
         properties = {
-            "Name": {"title": [{"text": {"content": epic.title}}]},
-            "Status": {"status": {"name": mapped_status}},
+            name_property: {"title": [{"text": {"content": epic.title}}]},
             key_property: {"rich_text": [{"text": {"content": epic.key}}]},
         }
+
+        # Only add status if status_property is configured
+        if status_property:
+            mapped_status = sprints_config.status_mapping.get(epic.status, epic.status)
+            properties[status_property] = {"status": {"name": mapped_status}}
 
         if dry_run:
             # Return a placeholder ID for dry run
@@ -220,17 +237,19 @@ class DbSyncEngine:
         if not needs_sync:
             return "skipped"
 
-        # Map status
-        status_mapping = self.config.database_sync.tasks.status_mapping
-        mapped_status = status_mapping.get(story.status, story.status)
+        # Get property names from config
+        tasks_config = self.config.database_sync.tasks
+        name_property = tasks_config.name_property
+        status_property = tasks_config.status_property
+        key_property = tasks_config.key_property
 
-        # Get key property name
-        key_property = self.config.database_sync.tasks.key_property
+        # Map status
+        mapped_status = tasks_config.status_mapping.get(story.status, story.status)
 
         # Build properties
         properties = {
-            "Name": {"title": [{"text": {"content": story.title}}]},
-            "Status": {"status": {"name": mapped_status}},
+            name_property: {"title": [{"text": {"content": story.title}}]},
+            status_property: {"status": {"name": mapped_status}},
             key_property: {"rich_text": [{"text": {"content": story.key}}]},
         }
 

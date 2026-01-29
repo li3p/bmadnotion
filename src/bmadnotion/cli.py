@@ -1038,6 +1038,11 @@ def setup_db():
             for db_type, fields in results.items():
                 click.echo(f"  Added to {db_type}: {', '.join(fields)}")
 
+        # Remind about Status property (cannot be added via API)
+        click.echo()
+        click.echo("Note: If your Sprints database doesn't have a 'Status' property,")
+        click.echo("      please add it manually in Notion UI (API limitation).")
+
         click.echo("Done.")
     except Exception as e:
         click.echo(f"Error: {e}", err=True)

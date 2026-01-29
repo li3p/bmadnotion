@@ -8,17 +8,42 @@ from typing import Any
 from notion_client import Client
 
 # Required fields for each database type
+# Note: status, formula, synced content, place cannot be added via API
+# They must be added manually in Notion UI
 REQUIRED_FIELDS = {
     "projects": {
-        "BMADProject": {"rich_text": {}},
+        "BMADProject": {"name": "BMADProject", "type": "rich_text", "rich_text": {}},
     },
     "sprints": {
-        "BMADEpic": {"rich_text": {}},
+        "BMADEpic": {"name": "BMADEpic", "type": "rich_text", "rich_text": {}},
+        # Status must be added manually in Notion UI (API limitation)
     },
     "tasks": {
-        "BMADStory": {"rich_text": {}},
+        "BMADStory": {"name": "BMADStory", "type": "rich_text", "rich_text": {}},
     },
 }
+
+
+def _get_existing_properties(client: Client, database_id: str) -> set[str]:
+    """Get existing property names from a database.
+
+    Uses data_sources API (2025-09-03) to query a sample row and extract property names.
+    """
+    # Get data_source_id from database
+    db = client.databases.retrieve(database_id=database_id)
+    data_sources = db.get("data_sources", [])
+    if not data_sources:
+        return set()
+
+    ds_id = data_sources[0]["id"]
+
+    # Query one row to get property names
+    response = client.data_sources.query(data_source_id=ds_id, page_size=1)
+    if not response.get("results"):
+        return set()
+
+    props = response["results"][0].get("properties", {})
+    return set(props.keys())
 
 
 def ensure_database_fields(
@@ -27,6 +52,9 @@ def ensure_database_fields(
     database_type: str,
 ) -> list[str]:
     """Ensure required fields exist in a Notion database.
+
+    Uses data_sources API (2025-09-03) to add properties.
+    Note: status, formula, synced content, place types cannot be added via API.
 
     Args:
         client: Official notion-client instance
@@ -41,9 +69,16 @@ def ensure_database_fields(
 
     required = REQUIRED_FIELDS[database_type]
 
-    # Get current database schema
+    # Get data_source_id from database
     db = client.databases.retrieve(database_id=database_id)
-    existing_props = set(db.get("properties", {}).keys())
+    data_sources = db.get("data_sources", [])
+    if not data_sources:
+        return []
+
+    ds_id = data_sources[0]["id"]
+
+    # Get existing property names
+    existing_props = _get_existing_properties(client, database_id)
 
     # Find missing fields
     fields_to_add: dict[str, Any] = {}
@@ -54,8 +89,8 @@ def ensure_database_fields(
     if not fields_to_add:
         return []
 
-    # Add missing fields
-    client.databases.update(database_id=database_id, properties=fields_to_add)
+    # Add missing fields via data_sources PATCH endpoint (2025-09-03 API)
+    client.data_sources.update(data_source_id=ds_id, properties=fields_to_add)
 
     return list(fields_to_add.keys())
 

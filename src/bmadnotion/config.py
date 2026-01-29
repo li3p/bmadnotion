@@ -51,8 +51,10 @@ class SprintsDbConfig(BaseModel):
 
     database_id: str | None = None
     key_property: str = "BMADEpic"
+    name_property: str = "Sprint name"
+    status_property: str = "Status"  # Added by setup-db if missing
     status_mapping: dict[str, str] = Field(default_factory=lambda: {
-        "backlog": "Not Started",
+        "backlog": "Backlog",
         "in-progress": "In Progress",
         "done": "Done",
     })
@@ -63,6 +65,8 @@ class TasksDbConfig(BaseModel):
 
     database_id: str | None = None
     key_property: str = "BMADStory"
+    name_property: str = "Task name"
+    status_property: str = "Status"
     status_mapping: dict[str, str] = Field(default_factory=lambda: {
         "backlog": "Backlog",
         "ready-for-dev": "Ready",

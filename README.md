@@ -290,13 +290,29 @@ For each database (Projects, Sprints, Tasks):
 2. Click "..." menu → "Add connections"
 3. Select your integration
 
-### 3. Run Init
+### 3. Add Status Fields (Manual Step)
+
+Due to Notion API limitations, **Status** type properties cannot be added via API. You need to manually add them:
+
+**Sprints database** - Add a `Status` property with options:
+- `Backlog` (gray)
+- `In Progress` (blue)
+- `Done` (green)
+
+**Tasks database** - If not using the Agile template, ensure `Status` has these options:
+- `Not Started`
+- `Ready For Dev`
+- `In Progress`
+- `Review`
+- `Done`
+
+### 4. Run Init
 
 ```bash
 bmad init
 ```
 
-This auto-detects your databases, sets up fields, and creates the Project row.
+This auto-detects your databases, sets up key fields (BMADProject, BMADEpic, BMADStory), and creates the Project row.
 
 ## Troubleshooting
 

@@ -21,12 +21,16 @@ database_sync:
   enabled: true
   sprints:
     database_id: "sprints-db-123"
+    name_property: "Name"
+    status_property: "Status"
     status_mapping:
       backlog: "Not Started"
       in-progress: "In Progress"
       done: "Done"
   tasks:
     database_id: "tasks-db-456"
+    name_property: "Name"
+    status_property: "Status"
     status_mapping:
       backlog: "Backlog"
       ready-for-dev: "Ready"
