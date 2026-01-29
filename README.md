@@ -48,9 +48,13 @@ This creates `.bmadnotion.yaml` configuration file.
 
 ### 2. Configure Notion
 
-Set your Notion integration token:
+Set your Notion integration token (choose one):
 
 ```bash
+# Option A: Use .env file (recommended)
+echo "NOTION_TOKEN=your_notion_integration_token" >> .env
+
+# Option B: Export in shell
 export NOTION_TOKEN=your_notion_integration_token
 ```
 
@@ -243,7 +247,10 @@ Page and database IDs are in the URL:
 
 ### "Token not found" error
 ```bash
-# Make sure NOTION_TOKEN is set
+# Option A: Create .env file in project root
+echo "NOTION_TOKEN=your_token_here" > .env
+
+# Option B: Export in shell
 export NOTION_TOKEN=your_token_here
 
 # Verify it's set

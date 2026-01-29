@@ -3,6 +3,10 @@
 from pathlib import Path
 
 import click
+from dotenv import load_dotenv
+
+# Load .env file if present (supports NOTION_TOKEN in .env)
+load_dotenv()
 
 from bmadnotion import __version__
 from bmadnotion.config import ConfigNotFoundError, TokenNotFoundError, load_config
