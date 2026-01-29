@@ -15,14 +15,24 @@ Sync [BMAD](https://docs.bmad-method.org/) project artifacts to Notion. Keep you
 
 ## Installation
 
+### As a CLI tool (recommended)
+
 ```bash
-pip install bmadnotion
+# With uv (recommended)
+uv tool install bmadnotion
+
+# Or with pipx
+pipx install bmadnotion
 ```
 
-Or with [uv](https://github.com/astral-sh/uv):
+### As a project dependency
 
 ```bash
+# With uv
 uv add bmadnotion
+
+# Or with pip
+pip install bmadnotion
 ```
 
 ## Quick Start
