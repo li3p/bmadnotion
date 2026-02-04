@@ -310,12 +310,8 @@ class DbSyncEngine:
             )
             page_id = page["id"]
 
-            # Add content blocks if story has content
-            if story.content:
-                blocks = markdown_to_blocks(story.content)
-                self.client.append_blocks(page_id, blocks)
-
-            # Save state
+            # Save state immediately so a failure appending blocks
+            # won't cause a duplicate entry on the next sync attempt.
             self.store.save_db_state(DbSyncState(
                 local_key=story.key,
                 entity_type="story",
@@ -323,6 +319,11 @@ class DbSyncEngine:
                 last_synced_mtime=story.mtime,
                 content_hash=story.content_hash,
             ))
+
+            # Add content blocks if story has content
+            if story.content:
+                blocks = markdown_to_blocks(story.content)
+                self.client.append_blocks(page_id, blocks)
 
             return "created"
         else:

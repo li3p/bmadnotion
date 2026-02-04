@@ -165,17 +165,18 @@ class PageSyncEngine:
             )
             page_id = page["id"]
 
-            # Add remaining blocks if any
-            if len(blocks) > 100:
-                self.client.append_blocks_in_batches(page_id, blocks[100:])
-
-            # Save state
+            # Save state immediately so a failure appending remaining blocks
+            # won't cause a duplicate page on the next sync attempt.
             self.store.save_page_state(PageSyncState(
                 local_path=local_path,
                 notion_page_id=page_id,
                 last_synced_mtime=doc.mtime,
                 content_hash=doc.content_hash,
             ))
+
+            # Add remaining blocks if any
+            if len(blocks) > 100:
+                self.client.append_blocks_in_batches(page_id, blocks[100:])
 
             return "created"
         else:
